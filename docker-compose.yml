@@ -1,0 +1,26 @@
+# Optional VPS upgrade path — not needed for the default Vercel deployment.
+# Runs the dashboard as a container with a local SQLite file (swap
+# DATABASE_URL back to Turso if you'd rather keep using that).
+#
+# Usage:
+#   cp .env.example .env
+#   # fill in .env, then set DATABASE_URL=file:/data/data.db
+#   docker compose up -d --build
+#
+# Put a reverse proxy (Caddy, nginx, Traefik) in front of port 3000 for
+# HTTPS; that part isn't included here. Cron: keep using cron-job.org (or
+# any scheduler) to POST /api/poll — it works the same against a VPS URL.
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - solar-data:/data
+    restart: unless-stopped
+
+volumes:
+  solar-data:

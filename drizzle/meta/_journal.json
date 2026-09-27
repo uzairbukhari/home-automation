@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1790515347395,
+      "tag": "0000_furry_charles_xavier",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790533612729,
+      "tag": "0001_add_energy_hourly_and_battery_health",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790536361380,
+      "tag": "0002_motionless_human_fly",
+      "breakpoints": true
+    }
+  ]
+}
