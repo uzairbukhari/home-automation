@@ -5,7 +5,7 @@
 // progress is persisted in backfill_state.
 import dotenv from "dotenv";
 dotenv.config({ path: ".env" });
-dotenv.config({ path: ".env.local", override: true });
+dotenv.config({ path: ".env.local" }); // never overrides real process.env (e.g. a shell-exported prod DATABASE_URL for a one-off command)
 
 async function main() {
   const { backfillStep } = await import("../lib/ingest/backfill");

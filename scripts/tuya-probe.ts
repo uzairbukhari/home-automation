@@ -3,7 +3,7 @@
 // components/device-card.tsx can be matched to real DP names per category.
 import dotenv from "dotenv";
 dotenv.config({ path: ".env" });
-dotenv.config({ path: ".env.local", override: true });
+dotenv.config({ path: ".env.local" }); // never overrides real process.env (e.g. a shell-exported prod DATABASE_URL for a one-off command)
 
 // Dynamic import: see the comment in scripts/dess-probe.ts — a static
 // top-level import here would be hoisted ahead of the dotenv calls above.

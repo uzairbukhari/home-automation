@@ -4,7 +4,7 @@
 // real inverter's output before trusting any dashboard numbers.
 import dotenv from "dotenv";
 dotenv.config({ path: ".env" });
-dotenv.config({ path: ".env.local", override: true });
+dotenv.config({ path: ".env.local" }); // never overrides real process.env (e.g. a shell-exported prod DATABASE_URL for a one-off command)
 
 // Dynamic import: must happen after dotenv.config() above actually runs.
 // A static top-level `import` here would be hoisted by esbuild/tsx ahead of
