@@ -27,7 +27,12 @@ function LoginForm() {
         setError(data.error ?? "Login failed.");
         return;
       }
-      const next = searchParams.get("next") || "/";
+      // Only ever redirect same-origin: "next" is attacker-controlled query
+      // input (a crafted /login?next=https://evil.com or //evil.com link),
+      // so anything but a plain in-app path ("/" and not "//…") is rejected
+      // to prevent an open-redirect phishing vector post-login.
+      const rawNext = searchParams.get("next");
+      const next = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
       router.push(next);
       router.refresh();
     } finally {
