@@ -25,13 +25,13 @@ function ChangeBadge({ changePct }: { changePct: number | null }) {
 
 function StatRow({ label, current, previous, changePct }: { label: string; current: number; previous: number; changePct: number | null }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-xs text-[var(--text-secondary)]">{label}</span>
+    <div className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_90px] items-center gap-3 py-2.5">
+      <span className="text-sm text-[var(--text-secondary)]">{label}</span>
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium tabular-nums text-[var(--text-primary)]">{formatKwh(current, 1)}</span>
+        <span className="text-sm font-semibold tabular-nums text-[var(--text-primary)]">{formatKwh(current, 1)}</span>
         <ChangeBadge changePct={changePct} />
       </div>
-      <span className="hidden sm:inline text-[11px] text-[var(--text-muted)] tabular-nums">
+      <span className="hidden sm:inline text-right text-xs text-[var(--text-muted)] tabular-nums">
         vs {formatKwh(previous, 1)}
       </span>
     </div>
@@ -40,9 +40,9 @@ function StatRow({ label, current, previous, changePct }: { label: string; curre
 
 export function TrendComparisonCard({ title, result }: { title: string; result: TrendResult }) {
   return (
-    <div className="glass-card p-5 flex flex-col gap-3">
-      <h2 className="text-sm font-medium text-[var(--text-primary)]">{title}</h2>
-      <div className="flex flex-col gap-2">
+    <div className="tile flex flex-col gap-3 p-5">
+      <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
+      <div className="flex flex-col divide-y divide-[var(--border)]">
         <StatRow
           label="Produced"
           current={result.current.pvKwh}

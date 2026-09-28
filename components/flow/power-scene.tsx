@@ -1,9 +1,8 @@
 "use client";
 
-import { Sun, Home, Zap, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, ZapOff } from "lucide-react";
-import { formatWatts } from "@/lib/utils";
+import { useEffect, useRef, useState } from "react";
+import { Sun, Home, Zap, BatteryCharging, UtilityPole, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { arcPath } from "@/lib/svg-arc";
 
 interface Props {
   pvW: number;
@@ -12,332 +11,180 @@ interface Props {
   gridW: number | null; // + importing, - exporting
   batterySoc: number; // %
   mode: string | null;
-  panelKwp?: number;
-  inverterTempC?: number | null;
 }
 
-const W = 480;
-const H = 360;
-const CENTER = { x: W / 2, y: H / 2 };
-const NODES = {
-  sun: { x: W / 2, y: 46 },
-  grid: { x: W - 70, y: H / 2 },
-  battery: { x: 70, y: H / 2 },
-  home: { x: W / 2, y: H - 46 },
-};
-
-function isOutage(gridW: number | null, mode: string | null): boolean {
-  const modeLower = mode?.toLowerCase() ?? "";
-  return (gridW == null || Math.abs(gridW) < 1) && (modeLower.includes("battery") || modeLower.includes("off-grid"));
+// Each path runs from an outer node toward the inverter hub in the middle
+// (the hub's solid disc covers the path ends). Points are given as
+// fractions of the scene and converted to pixels of the measured box, so
+// the moving dot stays round at every width.
+function curve(w: number, h: number, x0: number, y0: number): string {
+  const [ax, ay, cx, cy] = [x0 * w, y0 * h, 0.5 * w, 0.52 * h];
+  const mid = (ax + cx) / 2;
+  return `M ${ax} ${ay} C ${mid} ${ay}, ${mid} ${cy}, ${cx} ${cy}`;
 }
 
-function FlowLine({
-  from,
-  to,
-  active,
-  magnitudeW,
-  reverse,
+function useSize<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [size, setSize] = useState({ w: 900, h: 420 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setSize({ w: width, h: height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, size] as const;
+}
+
+const ACTIVE_W = 10;
+
+function FlowPath({
+  d,
   color,
+  active,
+  towardHub,
+  magnitudeW,
 }: {
-  from: { x: number; y: number };
-  to: { x: number; y: number };
-  active: boolean;
-  magnitudeW: number;
-  reverse?: boolean;
+  d: string;
   color: string;
+  active: boolean;
+  towardHub: boolean;
+  magnitudeW: number;
 }) {
-  const width = active ? Math.min(6, 1.5 + Math.abs(magnitudeW) / 400) : 1.5;
-  const speed = active ? Math.max(0.25, 1.4 - Math.abs(magnitudeW) / 2500) : 0;
-  const particleSpeed = active ? Math.max(0.8, 2.4 - Math.abs(magnitudeW) / 1500) : 0;
-  const pathD = `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
-  const [start, end] = reverse ? [to, from] : [from, to];
-  const particleOffsetPath = `path("M ${start.x} ${start.y} L ${end.x} ${end.y}")`;
-  const particleCount = active ? Math.min(3, 1 + Math.floor(Math.abs(magnitudeW) / 800)) : 0;
-
+  // Faster dot for more power: 3.2s at idle-ish, ~1.4s near 3 kW.
+  const duration = Math.max(1.4, 3.2 - Math.min(magnitudeW, 3000) / 1700);
   return (
     <g>
       <path
-        d={pathD}
-        stroke={active ? color : "var(--gridline)"}
-        strokeWidth={width}
-        strokeLinecap="round"
+        d={d}
         fill="none"
-        className={cn(active && "flow-path", active && reverse && "flow-path-reverse")}
-        style={active ? { animationDuration: `${speed}s`, opacity: 0.9 } : { opacity: 0.4 }}
+        stroke={active ? color : "var(--border)"}
+        strokeOpacity={active ? 0.75 : 1}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        className={cn(active && "flow-path", active && !towardHub && "flow-path-reverse")}
+        strokeDasharray={active ? undefined : "3 7"}
       />
-      {active &&
-        Array.from({ length: particleCount }).map((_, i) => (
-          <circle
-            key={i}
-            r={3}
-            fill={color}
-            className="flow-particle"
-            style={{
-              offsetPath: particleOffsetPath,
-              animationDuration: `${particleSpeed}s`,
-              animationDelay: `${(i * particleSpeed) / particleCount}s`,
-              filter: `drop-shadow(0 0 3px ${color})`,
-            }}
+      {active && (
+        <circle r={3.5} fill={color} className="flow-dot">
+          <animateMotion
+            dur={`${duration}s`}
+            repeatCount="indefinite"
+            path={d}
+            keyPoints={towardHub ? "0;1" : "1;0"}
+            keyTimes="0;1"
+            calcMode="linear"
           />
-        ))}
+        </circle>
+      )}
     </g>
   );
 }
 
-function NodeLabel({
-  pos,
+function Node({
+  icon: Icon,
   label,
   value,
+  unit,
+  caption,
   color,
-  sub,
+  className,
 }: {
-  pos: { x: number; y: number };
+  icon: LucideIcon;
   label: string;
   value: string;
+  unit: string;
+  caption?: string;
   color: string;
-  sub?: string;
+  className: string;
 }) {
   return (
-    <foreignObject x={pos.x - 50} y={pos.y + 34} width={100} height={40}>
-      <div className="flex flex-col items-center gap-0.5">
-        <span className="font-display text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{label}</span>
-        <span className="font-readout text-xs font-medium" style={{ color }}>
-          {value}
-        </span>
-        {sub && <span className="text-[9px] text-[var(--text-muted)]">{sub}</span>}
-      </div>
-    </foreignObject>
+    <div className={cn("absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center", className)}>
+      <span
+        className="grid size-12 md:size-[54px] place-items-center rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-2)]"
+        style={{ color }}
+      >
+        <Icon size={20} strokeWidth={1.75} />
+      </span>
+      <span className="mt-3 text-sm text-[var(--text-secondary)]">{label}</span>
+      <span className="mt-0.5 text-lg font-bold tabular-nums text-[var(--text-primary)]">
+        {value}
+        <span className="ml-1 text-xs font-semibold text-[var(--text-muted)]">{unit}</span>
+      </span>
+      {caption && <span className="mt-0.5 text-[11px] text-[var(--text-muted)]">{caption}</span>}
+    </div>
   );
 }
 
-function SolarNode({ pos, pvW, panelKwp }: { pos: { x: number; y: number }; pvW: number; panelKwp: number }) {
-  const color = "var(--series-4)";
-  const capacityPct = Math.min(100, (pvW / (panelKwp * 1000)) * 100);
-  const active = pvW > 5;
-  return (
-    <g>
-      <circle
-        cx={pos.x}
-        cy={pos.y}
-        r={22}
-        fill="none"
-        stroke={color}
-        strokeWidth={2}
-        strokeDasharray="2 3"
-        opacity={active ? 0.7 : 0.25}
-        className={active ? "spin-slow" : undefined}
-        style={{ transformOrigin: `${pos.x}px ${pos.y}px` }}
-      />
-      <circle
-        cx={pos.x}
-        cy={pos.y}
-        r={16}
-        fill={`color-mix(in srgb, ${color} ${active ? 20 : 8}%, transparent)`}
-        style={active ? { filter: `drop-shadow(0 0 ${6 + capacityPct / 8}px ${color})` } : undefined}
-      />
-      <foreignObject x={pos.x - 12} y={pos.y - 12} width={24} height={24}>
-        <Sun size={20} style={{ color }} />
-      </foreignObject>
-      <NodeLabel pos={pos} label="Solar" value={formatWatts(pvW)} color={color} sub={`${Math.round(capacityPct)}% cap.`} />
-    </g>
-  );
-}
+const kw = (w: number) => (Math.abs(w) / 1000).toFixed(2);
 
-const GAUGE_SIZE = 56;
-const GAUGE_STROKE = 6;
-const GAUGE_RADIUS = (GAUGE_SIZE - GAUGE_STROKE) / 2;
-const GAUGE_START = 135;
-const GAUGE_SWEEP = 270;
+export function PowerScene({ pvW, loadW, batteryW, gridW, batterySoc, mode }: Props) {
+  const charging = batteryW > ACTIVE_W;
+  const discharging = batteryW < -ACTIVE_W;
+  const importing = (gridW ?? 0) > ACTIVE_W;
+  const exporting = (gridW ?? 0) < -ACTIVE_W;
 
-function BatteryNode({
-  pos,
-  socPercent,
-  batteryW,
-}: {
-  pos: { x: number; y: number };
-  socPercent: number;
-  batteryW: number;
-}) {
-  const clamped = Math.min(100, Math.max(0, socPercent));
-  const charging = batteryW > 5;
-  const discharging = batteryW < -5;
-  const color = "var(--series-3)";
-  const cx = GAUGE_SIZE / 2;
-  const cy = GAUGE_SIZE / 2;
-  const trackPath = arcPath(cx, cy, GAUGE_RADIUS, GAUGE_START, GAUGE_START + GAUGE_SWEEP);
-  const valueEndAngle = GAUGE_START + (GAUGE_SWEEP * clamped) / 100;
-  const valuePath = arcPath(cx, cy, GAUGE_RADIUS, GAUGE_START, valueEndAngle);
-  const Icon = charging ? BatteryCharging : clamped < 20 ? BatteryLow : clamped < 70 ? BatteryMedium : BatteryFull;
+  const [ref, { w, h }] = useSize<HTMLDivElement>();
+  const PATHS = {
+    solar: curve(w, h, 0.22, 0.3),
+    battery: curve(w, h, 0.22, 0.76),
+    home: curve(w, h, 0.78, 0.3),
+    grid: curve(w, h, 0.78, 0.76),
+  };
 
   return (
-    <g>
-      <foreignObject x={pos.x - 45} y={pos.y - 40} width={90} height={80}>
-        <div className="flex flex-col items-center gap-1">
-          <div className="relative" style={{ filter: `drop-shadow(0 0 6px color-mix(in srgb, ${color} 60%, transparent))` }}>
-            <svg width={GAUGE_SIZE} height={GAUGE_SIZE} viewBox={`0 0 ${GAUGE_SIZE} ${GAUGE_SIZE}`}>
-              <path d={trackPath} stroke="var(--gridline)" strokeWidth={GAUGE_STROKE} strokeLinecap="round" fill="none" />
-              <path d={valuePath} stroke={color} strokeWidth={GAUGE_STROKE} strokeLinecap="round" fill="none" />
-              {/* Rising / falling charge bubbles inside the ring */}
-              {(charging || discharging) &&
-                [0, 0.6, 1.2].map((delay, i) => (
-                  <circle
-                    key={i}
-                    cx={cx + (i - 1) * 6}
-                    cy={discharging ? 12 : GAUGE_SIZE - 12}
-                    r={1.6}
-                    fill={color}
-                    className="rise-fade"
-                    style={{
-                      animationDelay: `${delay}s`,
-                      animationDirection: discharging ? "reverse" : "normal",
-                    }}
-                  />
-                ))}
-            </svg>
-            <Icon size={14} style={{ color }} className="absolute inset-0 m-auto" />
+    <div ref={ref} className="relative h-[360px] md:h-[420px] w-full">
+      <svg viewBox={`0 0 ${w} ${h}`} className="absolute inset-0 h-full w-full" aria-hidden>
+        <FlowPath d={PATHS.solar} color="var(--series-4)" active={pvW > ACTIVE_W} towardHub magnitudeW={pvW} />
+        <FlowPath
+          d={PATHS.battery}
+          color="var(--series-3)"
+          active={charging || discharging}
+          towardHub={discharging}
+          magnitudeW={Math.abs(batteryW)}
+        />
+        <FlowPath d={PATHS.home} color="var(--series-1)" active={loadW > ACTIVE_W} towardHub={false} magnitudeW={loadW} />
+        <FlowPath
+          d={PATHS.grid}
+          color="var(--series-2)"
+          active={importing || exporting}
+          towardHub={importing}
+          magnitudeW={Math.abs(gridW ?? 0)}
+        />
+      </svg>
+
+      <Node icon={Sun} label="Solar" value={kw(pvW)} unit="kW" color="var(--series-4)" className="left-[12%] top-[30%]" />
+      <Node
+        icon={BatteryCharging}
+        label="Battery"
+        value={Math.round(batterySoc).toString()}
+        unit="%"
+        caption={charging ? `Charging ${kw(batteryW)} kW` : discharging ? `Discharging ${kw(batteryW)} kW` : "Idle"}
+        color="var(--series-3)"
+        className="left-[12%] top-[76%]"
+      />
+      <Node icon={Home} label="Home load" value={kw(loadW)} unit="kW" color="var(--series-1)" className="left-[88%] top-[30%]" />
+      <Node
+        icon={UtilityPole}
+        label={exporting ? "Grid export" : "Grid import"}
+        value={gridW == null ? "—" : kw(gridW)}
+        unit="kW"
+        color="var(--series-2)"
+        className="left-[88%] top-[76%]"
+      />
+
+      <div className="absolute left-1/2 top-[52%] -translate-x-1/2 -translate-y-1/2">
+        <div className="grid size-[112px] md:size-[140px] place-items-center rounded-full border border-[#2b5566] bg-[radial-gradient(circle_at_50%_35%,#14304a,#0c1728_70%)] shadow-[0_0_0_10px_rgba(88,225,247,0.04),0_0_60px_rgba(88,225,247,0.08)]">
+          <div className="flex flex-col items-center px-3 text-center">
+            <Zap size={24} strokeWidth={1.75} className="text-[var(--accent)]" />
+            <span className="mt-1.5 text-xs md:text-sm text-[var(--text-secondary)]">Hybrid inverter</span>
+            <span className="mt-0.5 text-xs md:text-sm font-semibold text-[var(--text-primary)] line-clamp-1">{mode ?? "—"}</span>
           </div>
         </div>
-      </foreignObject>
-      <NodeLabel
-        pos={pos}
-        label={charging ? "Charging" : discharging ? "Discharging" : "Battery idle"}
-        value={`${Math.round(clamped)}% · ${charging ? "+" : discharging ? "-" : ""}${formatWatts(Math.abs(batteryW))}`}
-        color={color}
-      />
-    </g>
-  );
-}
-
-function GridNode({ pos, gridW, outage }: { pos: { x: number; y: number }; gridW: number | null; outage: boolean }) {
-  const color = outage ? "var(--status-critical)" : "var(--series-2)";
-  const importing = (gridW ?? 0) > 5;
-  const exporting = (gridW ?? 0) < -5;
-  return (
-    <g className={outage ? "flicker" : undefined}>
-      <circle
-        cx={pos.x}
-        cy={pos.y}
-        r={16}
-        fill={`color-mix(in srgb, ${color} ${importing || exporting || outage ? 20 : 8}%, transparent)`}
-        style={{ filter: `drop-shadow(0 0 6px color-mix(in srgb, ${color} 60%, transparent))` }}
-      />
-      <foreignObject x={pos.x - 12} y={pos.y - 12} width={24} height={24}>
-        {outage ? <ZapOff size={20} style={{ color }} /> : <Zap size={20} style={{ color }} />}
-      </foreignObject>
-      <NodeLabel
-        pos={pos}
-        label={outage ? "Grid — outage" : "Grid"}
-        value={outage ? "OFFLINE" : gridW == null ? "—" : formatWatts(Math.abs(gridW))}
-        color={color}
-      />
-    </g>
-  );
-}
-
-function HomeNode({ pos, loadW }: { pos: { x: number; y: number }; loadW: number }) {
-  const color = "var(--series-1)";
-  const active = loadW > 5;
-  const intensity = Math.min(1, loadW / 2000);
-  return (
-    <g>
-      <circle
-        cx={pos.x}
-        cy={pos.y}
-        r={16}
-        fill={`color-mix(in srgb, ${color} ${active ? 14 + intensity * 16 : 8}%, transparent)`}
-        style={active ? { filter: `drop-shadow(0 0 ${5 + intensity * 8}px ${color})` } : undefined}
-      />
-      <foreignObject x={pos.x - 12} y={pos.y - 12} width={24} height={24}>
-        <Home size={20} style={{ color }} />
-      </foreignObject>
-      <NodeLabel pos={pos} label="Home" value={formatWatts(loadW)} color={color} />
-    </g>
-  );
-}
-
-function InverterHub({
-  mode,
-  throughputW,
-  tempC,
-}: {
-  mode: string | null;
-  throughputW: number;
-  tempC?: number | null;
-}) {
-  const spinDuration = Math.max(2, 12 - throughputW / 400);
-  return (
-    <g>
-      <circle
-        cx={CENTER.x}
-        cy={CENTER.y}
-        r={26}
-        fill="none"
-        stroke="var(--hud-accent)"
-        strokeWidth={1}
-        strokeDasharray="1 4"
-        opacity={0.5}
-        className="spin-slow-reverse"
-        style={{ transformOrigin: `${CENTER.x}px ${CENTER.y}px`, animationDuration: `${spinDuration * 1.4}s` }}
-      />
-      <circle
-        cx={CENTER.x}
-        cy={CENTER.y}
-        r={22}
-        fill="var(--surface-2)"
-        stroke="var(--border)"
-        style={{ filter: "drop-shadow(0 0 10px rgba(53,184,255,.25))" }}
-      />
-      <foreignObject x={CENTER.x - 12} y={CENTER.y - 12} width={24} height={24}>
-        <Zap size={22} className="text-[var(--hud-accent)]" />
-      </foreignObject>
-      <foreignObject x={CENTER.x - 60} y={CENTER.y + 30} width={120} height={30}>
-        <div className="flex flex-col items-center">
-          <span className="font-readout text-[10px] text-[var(--text-secondary)] truncate max-w-full">
-            {mode ?? "—"}
-          </span>
-          {tempC != null && <span className="text-[9px] text-[var(--text-muted)]">{tempC.toFixed(0)}°C</span>}
-        </div>
-      </foreignObject>
-    </g>
-  );
-}
-
-export function PowerScene({ pvW, loadW, batteryW, gridW, batterySoc, mode, panelKwp = 3.5, inverterTempC }: Props) {
-  const importing = (gridW ?? 0) > 5;
-  const exporting = (gridW ?? 0) < -5;
-  const charging = batteryW > 5;
-  const discharging = batteryW < -5;
-  const outage = isOutage(gridW, mode);
-  const throughput = pvW + Math.abs(batteryW) + Math.abs(gridW ?? 0) + loadW;
-
-  return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="max-w-full">
-      <FlowLine from={NODES.sun} to={CENTER} active={pvW > 5} magnitudeW={pvW} color="var(--series-4)" />
-      <FlowLine from={NODES.battery} to={CENTER} active={discharging} magnitudeW={batteryW} reverse color="var(--series-3)" />
-      <FlowLine from={CENTER} to={NODES.battery} active={charging} magnitudeW={batteryW} color="var(--series-3)" />
-      <FlowLine
-        from={NODES.grid}
-        to={CENTER}
-        active={importing}
-        magnitudeW={gridW ?? 0}
-        reverse
-        color={outage ? "var(--status-critical)" : "var(--series-2)"}
-      />
-      <FlowLine
-        from={CENTER}
-        to={NODES.grid}
-        active={exporting}
-        magnitudeW={gridW ?? 0}
-        color="var(--series-2)"
-      />
-      <FlowLine from={CENTER} to={NODES.home} active={loadW > 5} magnitudeW={loadW} color="var(--series-1)" />
-
-      <InverterHub mode={mode} throughputW={throughput} tempC={inverterTempC} />
-
-      <SolarNode pos={NODES.sun} pvW={pvW} panelKwp={panelKwp} />
-      <BatteryNode pos={NODES.battery} socPercent={batterySoc} batteryW={batteryW} />
-      <GridNode pos={NODES.grid} gridW={gridW} outage={outage} />
-      <HomeNode pos={NODES.home} loadW={loadW} />
-    </svg>
+      </div>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import { getSettings, getLatestIngestRunBySource, getBackfillState } from "@/lib/queries";
 import { SettingsForm } from "@/components/settings-form";
 import { IngestPanel } from "@/components/ingest-panel";
+import { PageHeader } from "@/components/ui/panel";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +14,8 @@ export default async function SettingsPage() {
   const runs = Array.from(latestRuns.values());
 
   return (
-    <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="font-display text-xl font-bold uppercase tracking-wide text-[var(--text-primary)]">Settings</h1>
-        <p className="font-readout text-xs text-[var(--text-muted)]">
-          Tariff, system details, and data pipeline health
-        </p>
-      </header>
+    <>
+      <PageHeader eyebrow="Settings" title="Connections and system" sub="Tariff, system details, and data pipeline health" />
 
       <IngestPanel
         runs={runs.map((r) => ({
@@ -39,6 +35,6 @@ export default async function SettingsPage() {
       />
 
       <SettingsForm initial={settings} />
-    </div>
+    </>
   );
 }

@@ -123,6 +123,9 @@ export function treeEquivalent(co2Kg: number): number {
 
 // --- Alerts ---
 
+/** State of charge at or below which the "Battery low" alert fires. */
+export const LOW_SOC_ALERT_PCT = 15;
+
 export function generateAlerts(params: {
   inverter: LiveInverter | null;
   devices: LiveDevice[];
@@ -133,7 +136,7 @@ export function generateAlerts(params: {
   const { inverter, devices, ingestFailing } = params;
 
   if (inverter) {
-    if (inverter.batterySoc <= 15) {
+    if (inverter.batterySoc <= LOW_SOC_ALERT_PCT) {
       alerts.push({
         id: "battery-low",
         severity: inverter.batterySoc <= 8 ? "critical" : "warning",

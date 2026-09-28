@@ -1,17 +1,15 @@
 "use client";
 
 import ReactECharts from "echarts-for-react";
-import { chartTheme, baseGrid, baseAxisLabel, baseAxisLine, baseSplitLine } from "@/lib/chart-theme";
+import { chartTheme, baseGrid, baseTooltip, baseAxisLabel, baseAxisLine, baseSplitLine } from "@/lib/chart-theme";
 
 export function SavingsBars({ points }: { points: Array<{ label: string; pkr: number }> }) {
   const option = {
     backgroundColor: "transparent",
     grid: baseGrid,
     tooltip: {
-      trigger: "axis" as const,
-      backgroundColor: chartTheme.surface1,
-      borderColor: chartTheme.gridline,
-      textStyle: { color: chartTheme.textPrimary, fontSize: 12 },
+      ...baseTooltip,
+      axisPointer: { type: "shadow" as const, shadowStyle: { color: "rgba(142,154,179,0.08)" } },
       valueFormatter: (v: number) =>
         new Intl.NumberFormat("en-PK", { style: "currency", currency: "PKR", maximumFractionDigits: 0 }).format(v),
     },
@@ -24,9 +22,7 @@ export function SavingsBars({ points }: { points: Array<{ label: string; pkr: nu
     },
     yAxis: {
       type: "value",
-      name: "PKR",
-      nameTextStyle: { color: chartTheme.textMuted },
-      axisLabel: baseAxisLabel,
+      axisLabel: { ...baseAxisLabel, formatter: (v: number) => `Rs ${v.toLocaleString("en-US")}` },
       axisLine: { show: false },
       splitLine: baseSplitLine,
     },
@@ -35,7 +31,7 @@ export function SavingsBars({ points }: { points: Array<{ label: string; pkr: nu
         name: "Saved",
         type: "bar",
         data: points.map((p) => Math.round(p.pkr)),
-        itemStyle: { color: chartTheme.series.solar, borderRadius: [4, 4, 0, 0] },
+        itemStyle: { color: chartTheme.series.solar, borderRadius: [6, 6, 0, 0] }, barMaxWidth: 36,
       },
     ],
   };

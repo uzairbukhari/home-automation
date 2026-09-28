@@ -38,13 +38,13 @@ export function PeakLoadHeatmap({ points }: { points: WeekdayHourPoint[] }) {
       min: 0,
       max: maxLoad,
       show: false,
-      inRange: { color: ["transparent", chartTheme.series.load] },
+      inRange: { color: ["#111d31", chartTheme.series.load] },
     },
     series: [
       {
         type: "heatmap",
         data,
-        itemStyle: { borderRadius: 2, borderColor: "transparent", borderWidth: 2 },
+        itemStyle: { borderRadius: 4, borderColor: chartTheme.surface1, borderWidth: 3 },
       },
     ],
   };

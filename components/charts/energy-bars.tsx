@@ -14,15 +14,7 @@ export function EnergyBars({ points }: { points: EnergyBarPoint[] }) {
   const option = {
     backgroundColor: "transparent",
     grid: baseGrid,
-    legend: {
-      top: 0,
-      left: 0,
-      textStyle: { color: chartTheme.textSecondary, fontSize: 12 },
-      icon: "roundRect",
-      itemWidth: 10,
-      itemHeight: 10,
-    },
-    tooltip: { ...baseTooltip, axisPointer: { type: "shadow" as const } },
+    tooltip: { ...baseTooltip, axisPointer: { type: "shadow" as const, shadowStyle: { color: "rgba(142,154,179,0.08)" } } },
     xAxis: {
       type: "category",
       data: points.map((p) => p.label),
@@ -32,31 +24,29 @@ export function EnergyBars({ points }: { points: EnergyBarPoint[] }) {
     },
     yAxis: {
       type: "value",
-      name: "kWh",
-      nameTextStyle: { color: chartTheme.textMuted },
-      axisLabel: baseAxisLabel,
+      axisLabel: { ...baseAxisLabel, formatter: "{value} kWh" },
       axisLine: { show: false },
       splitLine: baseSplitLine,
     },
     series: [
       {
-        name: "Produced",
+        name: "Solar",
         type: "bar",
         data: points.map((p) => Number(p.pvKwh.toFixed(2))),
-        itemStyle: { color: chartTheme.series.solar, borderRadius: [4, 4, 0, 0] },
+        itemStyle: { color: chartTheme.series.solar, borderRadius: [3, 3, 0, 0] },
         barGap: "20%",
       },
       {
-        name: "Consumed",
+        name: "Home",
         type: "bar",
         data: points.map((p) => Number(p.loadKwh.toFixed(2))),
-        itemStyle: { color: chartTheme.series.load, borderRadius: [4, 4, 0, 0] },
+        itemStyle: { color: chartTheme.series.load, borderRadius: [3, 3, 0, 0] },
       },
       {
-        name: "Grid import",
+        name: "Grid",
         type: "bar",
         data: points.map((p) => Number(p.gridImportKwh.toFixed(2))),
-        itemStyle: { color: chartTheme.series.grid, borderRadius: [4, 4, 0, 0] },
+        itemStyle: { color: chartTheme.series.grid, borderRadius: [3, 3, 0, 0] },
       },
     ],
   };

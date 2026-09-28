@@ -31,23 +31,20 @@ export function BatteryHealthCard({
     : null;
 
   return (
-    <div className="glass-card p-5 flex flex-col gap-3">
-      <h2 className="text-sm font-medium text-[var(--text-primary)]">Battery health</h2>
-      <div className="grid grid-cols-3 gap-3">
-        <Stat icon={Repeat} label="Lifetime cycles" value={lifetimeCycles.toFixed(1)} accent="var(--series-3)" />
-        <Stat
-          icon={BatteryCharging}
-          label="30d SoC range"
-          value={rangeMin != null && rangeMax != null ? `${Math.round(rangeMin)}–${Math.round(rangeMax)}%` : "—"}
-          accent="var(--series-1)"
-        />
-        <Stat
-          icon={ArrowDownUp}
-          label="Avg daily DoD"
-          value={avgDod != null ? `${Math.round(avgDod)}%` : "—"}
-          accent="var(--series-7)"
-        />
-      </div>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <Stat icon={Repeat} label="Equivalent full cycles" value={lifetimeCycles.toFixed(1)} accent="var(--series-3)" />
+      <Stat
+        icon={BatteryCharging}
+        label="SoC range, last 30 days"
+        value={rangeMin != null && rangeMax != null ? `${Math.round(rangeMin)}–${Math.round(rangeMax)}%` : "—"}
+        accent="var(--series-1)"
+      />
+      <Stat
+        icon={ArrowDownUp}
+        label="Average daily depth of discharge"
+        value={avgDod != null ? `${Math.round(avgDod)}%` : "—"}
+        accent="var(--series-7)"
+      />
     </div>
   );
 }
@@ -64,15 +61,17 @@ function Stat({
   accent: string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="tile flex items-center gap-3.5 p-4">
       <span
-        className="w-fit rounded-full p-1.5"
-        style={{ backgroundColor: `color-mix(in srgb, ${accent} 18%, transparent)`, color: accent }}
+        className="grid size-9 shrink-0 place-items-center rounded-xl"
+        style={{ backgroundColor: `color-mix(in srgb, ${accent} 13%, transparent)`, color: accent }}
       >
-        <Icon size={14} />
+        <Icon size={17} />
       </span>
-      <span className="text-sm font-semibold tabular-nums text-[var(--text-primary)]">{value}</span>
-      <span className="text-[11px] text-[var(--text-muted)]">{label}</span>
+      <div>
+        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+        <p className="mt-0.5 text-xl font-bold tabular-nums text-[var(--text-primary)]">{value}</p>
+      </div>
     </div>
   );
 }

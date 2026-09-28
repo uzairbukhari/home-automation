@@ -1,56 +1,54 @@
-// Literal hex values mirroring app/globals.css's HUD theme custom
-// properties. ECharts option objects need literal color strings (they
-// don't resolve CSS var(...) references), so this is the single place
-// those values are duplicated. Keep in sync with the :root block in
-// app/globals.css.
+// Literal hex values mirroring app/globals.css's :root custom properties.
+// ECharts option objects need literal color strings (they don't resolve
+// CSS var(...) references), so this is the single place those values are
+// duplicated. Keep in sync with the :root block in app/globals.css.
 export const chartTheme = {
-  textPrimary: "#eaf6ff",
-  textSecondary: "#93aec6",
-  textMuted: "#55708c",
-  gridline: "#16263c",
-  baseline: "#223650",
-  surface1: "#0a1120",
+  textPrimary: "#eef6ff",
+  textSecondary: "#b4c0d6",
+  textMuted: "#8e9ab3",
+  gridline: "#24344f",
+  baseline: "#24344f",
+  surface1: "#0c1728",
   series: {
-    solar: "#ffcf3d",
-    grid: "#ff8a3d",
-    battery: "#29e0a8",
-    load: "#35b8ff",
+    solar: "#f8d35a",
+    grid: "#8e9ab3",
+    battery: "#9cf7c6",
+    load: "#59e3ff",
   },
   status: {
-    good: "#24e07f",
-    warning: "#ffcc33",
-    serious: "#ff9a5c",
-    critical: "#ff4d4d",
+    good: "#7ee2a8",
+    warning: "#f8d35a",
+    serious: "#f5a97f",
+    critical: "#f28b82",
   },
-  mono: "var(--font-readout), monospace",
+  font: "Inter, ui-sans-serif, system-ui, sans-serif",
 };
 
 export const baseGrid = {
-  left: 8,
+  left: 4,
   right: 8,
-  top: 28,
-  bottom: 8,
+  top: 16,
+  bottom: 4,
   containLabel: true,
 };
 
 export const baseTooltip = {
   trigger: "axis" as const,
-  backgroundColor: "#0d1728",
+  backgroundColor: "#101a2d",
   borderColor: chartTheme.gridline,
   borderWidth: 1,
-  padding: 10,
-  extraCssText: "box-shadow: 0 0 24px -6px rgba(53,184,255,.35); backdrop-filter: blur(6px);",
-  textStyle: { color: chartTheme.textPrimary, fontSize: 12, fontFamily: chartTheme.mono },
+  padding: [8, 12],
+  extraCssText: "border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.35);",
+  textStyle: { color: chartTheme.textPrimary, fontSize: 12, fontFamily: chartTheme.font },
   axisPointer: {
-    type: "cross" as const,
-    label: { backgroundColor: chartTheme.gridline },
+    type: "line" as const,
     lineStyle: { color: chartTheme.baseline },
   },
 };
 
-export const baseAxisLabel = { color: chartTheme.textMuted, fontSize: 11, fontFamily: chartTheme.mono };
-export const baseAxisLine = { lineStyle: { color: chartTheme.baseline } };
-export const baseSplitLine = { lineStyle: { color: chartTheme.gridline, type: "dashed" as const } };
+export const baseAxisLabel = { color: chartTheme.textMuted, fontSize: 11, fontFamily: chartTheme.font };
+export const baseAxisLine = { show: true, lineStyle: { color: chartTheme.baseline } };
+export const baseSplitLine = { lineStyle: { color: chartTheme.gridline, type: "dotted" as const } };
 
 /** #rrggbb -> "rgba(r,g,b,a)" — ECharts' canvas renderer needs a literal color it can parse, not CSS color-mix(). */
 function hexToRgba(hex: string, alpha: number): string {
@@ -61,8 +59,8 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-/** A glowing gradient area-fill for line/area series, fading from the series color to transparent. */
-export function glowAreaStyle(color: string, opacity = 0.35) {
+/** A faint gradient area-fill under a line series, fading from the series color to transparent. */
+export function areaFill(color: string, opacity = 0.14) {
   return {
     color: {
       type: "linear" as const,
@@ -78,7 +76,7 @@ export function glowAreaStyle(color: string, opacity = 0.35) {
   };
 }
 
-/** A glow shadow for a line series' stroke. */
-export function glowLineStyle(color: string, width = 2.5) {
-  return { color, width, shadowColor: color, shadowBlur: 10 };
+/** A plain line stroke for a line series. */
+export function lineStroke(color: string, width = 2) {
+  return { color, width };
 }

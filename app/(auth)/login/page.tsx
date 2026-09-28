@@ -2,8 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Sun } from "lucide-react";
-import { HudBackground } from "@/components/hud/hud-background";
+import { Hexagon } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
@@ -43,17 +42,15 @@ function LoginForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="glass-card w-full max-w-sm p-8 flex flex-col gap-5"
+      className="card w-full max-w-sm p-8 flex flex-col gap-6"
     >
-      <div className="flex items-center gap-3">
-        <div className="rounded-full p-2.5 bg-[var(--series-4)]/15 text-[var(--series-4)]">
-          <Sun size={22} />
-        </div>
+      <div className="flex flex-col items-center gap-4 text-center">
+        <span className="grid size-14 place-items-center rounded-2xl border border-[#2b5566] bg-[linear-gradient(145deg,#12324a,#0c1d30)] text-[var(--accent)]">
+          <Hexagon size={26} strokeWidth={1.75} />
+        </span>
         <div>
-          <h1 className="font-display text-lg font-bold uppercase tracking-wide text-[var(--text-primary)]">
-            Solar Dashboard
-          </h1>
-          <p className="text-sm text-[var(--text-muted)]">Sign in to continue</p>
+          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Photon Home</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Sign in to your energy dashboard</p>
         </div>
       </div>
 
@@ -69,7 +66,7 @@ function LoginForm() {
           autoFocus
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-lg bg-[var(--surface-2)] border border-[var(--border)] px-3 py-2.5 text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-[var(--series-1)]"
+          className="h-11 rounded-xl bg-[var(--surface-2)] border border-[var(--border-strong)] px-3.5 text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent)]"
           placeholder="••••••••"
         />
       </div>
@@ -79,7 +76,7 @@ function LoginForm() {
       <button
         type="submit"
         disabled={loading || password.length === 0}
-        className="rounded-lg bg-[var(--series-1)] text-white py-2.5 font-medium disabled:opacity-50 transition"
+        className="h-11 rounded-xl bg-[var(--accent)] font-semibold text-[var(--accent-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {loading ? "Signing in..." : "Sign in"}
       </button>
@@ -89,13 +86,10 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <>
-      <HudBackground />
-      <main className="flex-1 flex items-center justify-center p-6">
-        <Suspense fallback={null}>
-          <LoginForm />
-        </Suspense>
-      </main>
-    </>
+    <main className="flex-1 flex items-center justify-center p-6">
+      <Suspense fallback={null}>
+        <LoginForm />
+      </Suspense>
+    </main>
   );
 }

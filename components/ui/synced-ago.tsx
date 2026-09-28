@@ -20,6 +20,6 @@ export function SyncedAgo({ ts }: { ts: string }) {
     () => null // SSR snapshot: no reliable "now" until hydrated
   );
 
-  if (seconds == null) return <>Syncing…</>;
-  return <>Synced {seconds}s ago</>;
+  if (seconds == null) return <>Updating…</>;
+  return <>Updated {seconds < 90 ? `${seconds}s` : `${Math.round(seconds / 60)} min`} ago</>;
 }

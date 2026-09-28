@@ -2,18 +2,17 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, BarChart3, PiggyBank, Plug, Settings, LogOut, Sun } from "lucide-react";
+import { Hexagon, LogOut, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Pill } from "@/components/ui/pill";
 
 const LINKS = [
-  { href: "/", label: "Live", icon: LayoutDashboard },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/savings", label: "Savings", icon: PiggyBank },
-  { href: "/devices", label: "Devices", icon: Plug },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/", label: "Overview" },
+  { href: "/solar", label: "Solar" },
+  { href: "/devices", label: "Devices" },
 ];
 
-export function Nav() {
+export function Nav({ dessOk, tuyaOk }: { dessOk: boolean | null; tuyaOk: boolean | null }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -23,72 +22,76 @@ export function Nav() {
     router.refresh();
   }
 
+  const status =
+    dessOk === false || tuyaOk === false ? (
+      <Pill tone="bad">{dessOk === false ? "DessMonitor offline" : "Tuya offline"}</Pill>
+    ) : dessOk ? (
+      <Pill tone="good">DessMonitor live</Pill>
+    ) : (
+      <Pill tone="warn">Awaiting data</Pill>
+    );
+
+  const tabs = LINKS.map(({ href, label }) => {
+    const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+    return (
+      <Link
+        key={href}
+        href={href}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "relative flex h-full items-center px-1 text-[15px] font-medium transition-colors whitespace-nowrap",
+          active ? "text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+        )}
+      >
+        {label}
+        {active && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[var(--accent)]" />}
+      </Link>
+    );
+  });
+
   return (
-    <nav
-      className={cn(
-        "shrink-0 z-40",
-        "fixed bottom-0 inset-x-0 flex items-center justify-around gap-1 px-2 py-2",
-        "border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-0)_85%,transparent)] backdrop-blur-xl",
-        "md:static md:flex-col md:justify-start md:w-[72px] md:h-screen md:sticky md:top-0",
-        "md:border-t-0 md:border-r md:py-4 md:gap-2"
-      )}
-    >
-      <div className="hidden md:flex flex-col items-center gap-1 pb-6">
-        <div
-          className="rounded-xl p-2.5 text-[var(--hud-accent)]"
-          style={{
-            backgroundColor: "color-mix(in srgb, var(--hud-accent) 14%, transparent)",
-            boxShadow: "0 0 18px -4px var(--hud-accent)",
-          }}
-        >
-          <Sun size={18} />
+    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-0)_88%,transparent)] backdrop-blur-xl">
+      <div className="mx-auto flex h-[72px] md:h-[84px] max-w-[1480px] items-center justify-between gap-6 px-4 md:px-12">
+        <Link href="/" className="flex items-center gap-3 min-w-0">
+          <span className="grid size-10 md:size-11 shrink-0 place-items-center rounded-xl border border-[#2b5566] bg-[linear-gradient(145deg,#12324a,#0c1d30)] text-[var(--accent)]">
+            <Hexagon size={20} strokeWidth={1.75} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[17px] font-semibold leading-tight text-[var(--text-primary)]">Photon Home</span>
+            <span className="block truncate text-[13px] text-[var(--text-muted)]">Islamabad · Hybrid system</span>
+          </span>
+        </Link>
+
+        <nav className="hidden md:flex h-full items-stretch gap-8">{tabs}</nav>
+
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:inline-flex">{status}</span>
+          <Link
+            href="/settings"
+            title="Settings"
+            aria-label="Settings"
+            className={cn(
+              "grid size-10 place-items-center rounded-xl border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]",
+              pathname.startsWith("/settings") && "border-[var(--accent)] text-[var(--accent)]"
+            )}
+          >
+            <SlidersHorizontal size={17} />
+          </Link>
+          <button
+            onClick={logout}
+            title="Sign out"
+            aria-label="Sign out"
+            className="group grid size-10 place-items-center rounded-full border border-[var(--border-strong)] bg-[var(--surface-3)] text-[13px] font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--status-critical)]"
+          >
+            <span className="group-hover:hidden">PH</span>
+            <LogOut size={15} className="hidden group-hover:block text-[var(--status-critical)]" />
+          </button>
         </div>
       </div>
 
-      <div className="flex md:flex-col items-center gap-1 md:gap-2 flex-1">
-        {LINKS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
-          return (
-            <Link
-              key={href}
-              href={href}
-              title={label}
-              className={cn(
-                "relative flex flex-col md:flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 md:w-14 md:h-14 text-[10px] font-medium transition-colors font-display tracking-wide",
-                active
-                  ? "text-[var(--hud-accent)]"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--surface-2)]"
-              )}
-              style={
-                active
-                  ? {
-                      backgroundColor: "color-mix(in srgb, var(--hud-accent) 14%, transparent)",
-                      boxShadow: "0 0 20px -8px var(--hud-accent)",
-                    }
-                  : undefined
-              }
-            >
-              {active && (
-                <span
-                  className="hidden md:block absolute -left-2 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-full"
-                  style={{ backgroundColor: "var(--hud-accent)", boxShadow: "0 0 8px var(--hud-accent)" }}
-                />
-              )}
-              <Icon size={18} />
-              <span className="uppercase text-[9px]">{label}</span>
-            </Link>
-          );
-        })}
-      </div>
-
-      <button
-        onClick={logout}
-        title="Sign out"
-        className="hidden md:flex flex-col items-center justify-center gap-1 rounded-xl w-14 h-14 text-[10px] font-display uppercase text-[var(--text-muted)] hover:text-[var(--status-critical)] hover:bg-[var(--surface-2)] transition-colors"
-      >
-        <LogOut size={18} />
-        Exit
-      </button>
-    </nav>
+      <nav className="no-scrollbar flex h-11 items-stretch gap-6 overflow-x-auto border-t border-[var(--border)] px-4 md:hidden">
+        {tabs}
+      </nav>
+    </header>
   );
 }

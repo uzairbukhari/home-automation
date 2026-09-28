@@ -3,38 +3,38 @@
 :root {
   color-scheme: dark;
 
-  /* Sci-fi HUD surfaces: deep navy-black instead of neutral gray, so every
-     glass panel reads as an instrument display rather than a plain card. */
-  --surface-0: #05070d; /* page plane */
-  --surface-1: #0a1120; /* card / chart surface */
-  --surface-2: #101a2e; /* raised surface (hover, inputs) */
-  --text-primary: #eaf6ff;
-  --text-secondary: #93aec6;
-  --text-muted: #55708c;
-  --gridline: #16263c;
-  --baseline: #223650;
-  --border: rgba(56, 214, 255, 0.16); /* cyan hairline, replaces the old neutral border */
+  /* Calm deep-navy surfaces: flat cards with a hairline border, no glow. */
+  --surface-0: #07101e; /* page plane */
+  --surface-1: #0c1728; /* card / chart surface */
+  --surface-2: #111d31; /* inner tile, input, hover */
+  --surface-3: #152238; /* raised control (active segment, avatar) */
+  --text-primary: #eef6ff;
+  --text-secondary: #b4c0d6;
+  --text-muted: #8e9ab3;
+  --gridline: #1c2a42;
+  --baseline: #24344f;
+  --border: #24344f;
+  --border-strong: #2b3c58;
 
-  /* Categorical (fixed order, never cycled) — same hue identity as before,
-     pushed into a neon HUD range so glow/shadow effects read clearly. */
-  --series-1: #35b8ff; /* cyan-blue  - PV / solar, home */
-  --series-2: #ff8a3d; /* amber      - grid */
-  --series-3: #29e0a8; /* teal-green - battery */
-  --series-4: #ffcf3d; /* amber-yellow - solar, load */
-  --series-5: #ff5ec4; /* magenta */
-  --series-6: #4dff7a; /* green */
-  --series-7: #b18bff; /* violet */
-  --series-8: #ff5c5c; /* red */
+  /* Brand accent — active tab underline, focus ring, primary button. */
+  --accent: #58e1f7;
+  --accent-foreground: #04101a;
+
+  /* Categorical (fixed order, never cycled). */
+  --series-1: #59e3ff; /* cyan    - home load */
+  --series-2: #8e9ab3; /* slate   - grid */
+  --series-3: #9cf7c6; /* mint    - battery */
+  --series-4: #f8d35a; /* yellow  - solar */
+  --series-5: #f28b82; /* coral */
+  --series-6: #7ee2a8; /* green */
+  --series-7: #9a7bff; /* violet */
+  --series-8: #f28b82; /* coral */
 
   /* Status (fixed, never themed) */
-  --status-good: #24e07f;
-  --status-warning: #ffcc33;
-  --status-serious: #ff9a5c;
-  --status-critical: #ff4d4d;
-
-  /* HUD chrome accent — corner brackets, scanlines, command bar. */
-  --hud-accent: var(--series-1);
-  --hud-line: rgba(53, 184, 255, 0.4);
+  --status-good: #7ee2a8;
+  --status-warning: #f8d35a;
+  --status-serious: #f5a97f;
+  --status-critical: #f28b82;
 
   --background: var(--surface-0);
   --foreground: var(--text-primary);
@@ -46,204 +46,94 @@
   --color-surface-0: var(--surface-0);
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
   --color-border: var(--border);
+  --color-accent: var(--accent);
   --color-series-1: var(--series-1);
   --color-series-2: var(--series-2);
   --color-series-3: var(--series-3);
   --color-series-4: var(--series-4);
   --color-status-good: var(--status-good);
   --color-status-warning: var(--status-warning);
-  --color-status-serious: var(--status-serious);
   --color-status-critical: var(--status-critical);
-  --font-sans: var(--font-body);
-  --font-mono: var(--font-readout);
+  --font-sans: var(--font-inter);
 }
 
 body {
-  background: radial-gradient(ellipse 90% 60% at 50% -10%, #0e2138 0%, var(--surface-0) 55%);
+  background:
+    radial-gradient(ellipse 70% 45% at 50% -8%, #13233c 0%, transparent 70%),
+    var(--surface-0);
+  background-attachment: fixed;
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   min-height: 100vh;
-  position: relative;
-}
-
-/* Cheap one-time grain texture (SVG feTurbulence), blended very lightly so
-   panels don't read as flat vector fills. Not animated — no perf cost. */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 50;
-  opacity: 0.025;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-.font-display {
-  font-family: var(--font-display), var(--font-sans), sans-serif;
-  letter-spacing: 0.02em;
-}
-
-.font-readout {
-  font-family: var(--font-readout), var(--font-mono), monospace;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Glass panel used across the dashboard: cyan-tinted instrument glass. */
-.glass-card {
-  background: color-mix(in srgb, var(--surface-1) 80%, transparent);
+/* Base card used across the dashboard: flat navy, hairline border, soft drop shadow. */
+.card {
+  background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 0.875rem;
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-  box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
-    0 0 0 1px color-mix(in srgb, var(--hud-accent) 8%, transparent) inset,
-    0 8px 40px rgba(0, 0, 0, 0.45),
-    0 0 50px -24px color-mix(in srgb, var(--hud-accent) 35%, transparent),
-    0 0 40px -28px var(--tile-glow, transparent);
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.13);
 }
 
-/* Opt-in on hero/larger panels: adds glowing corner brackets, HUD-style. */
-.hud-frame {
-  position: relative;
-}
-.hud-frame::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  --hc: var(--hud-accent);
-  --hl: 18px;
-  --ht: 2px;
-  background:
-    linear-gradient(var(--hc), var(--hc)) top left / var(--hl) var(--ht) no-repeat,
-    linear-gradient(var(--hc), var(--hc)) top left / var(--ht) var(--hl) no-repeat,
-    linear-gradient(var(--hc), var(--hc)) top right / var(--hl) var(--ht) no-repeat,
-    linear-gradient(var(--hc), var(--hc)) top right / var(--ht) var(--hl) no-repeat,
-    linear-gradient(var(--hc), var(--hc)) bottom left / var(--hl) var(--ht) no-repeat,
-    linear-gradient(var(--hc), var(--hc)) bottom left / var(--ht) var(--hl) no-repeat,
-    linear-gradient(var(--hc), var(--hc)) bottom right / var(--hl) var(--ht) no-repeat,
-    linear-gradient(var(--hc), var(--hc)) bottom right / var(--ht) var(--hl) no-repeat;
-  opacity: 0.85;
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--hc) 70%, transparent));
+/* Inner tile nested inside a card (metric cards, device cards, stat strips). */
+.tile {
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 14px;
 }
 
-/* Thin animated sweep across a .hud-frame panel — used sparingly (hero panels only). */
-.hud-scan {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  border-radius: inherit;
-}
-.hud-scan::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 40%;
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    color-mix(in srgb, var(--hud-accent) 10%, transparent),
-    transparent
-  );
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .hud-scan::after {
-    animation: hud-sweep 6s ease-in-out infinite;
-  }
-
-  @keyframes hud-sweep {
-    0% { transform: translateY(-100%); }
-    50% { transform: translateY(220%); }
-    100% { transform: translateY(220%); }
-  }
-
-  @keyframes soft-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
-  .pulse-dot {
-    animation: soft-pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes spin-slow {
-    to { transform: rotate(360deg); }
-  }
-  .spin-slow {
-    animation: spin-slow 12s linear infinite;
-  }
-  @keyframes spin-slow-reverse {
-    to { transform: rotate(-360deg); }
-  }
-  .spin-slow-reverse {
-    animation: spin-slow-reverse 9s linear infinite;
-  }
-
-  @keyframes rise-fade {
-    0% { transform: translateY(0); opacity: 0; }
-    15%, 85% { opacity: 1; }
-    100% { transform: translateY(-100%); opacity: 0; }
-  }
-  .rise-fade {
-    animation: rise-fade 2.4s linear infinite;
-  }
-
-  @keyframes flicker {
-    0%, 92%, 100% { opacity: 1; }
-    94% { opacity: 0.3; }
-    96% { opacity: 0.85; }
-  }
-  .flicker {
-    animation: flicker 2.5s steps(1) infinite;
-  }
+/* Horizontal scroll strip (mobile tab bar) without a visible scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
-/* Energy-flow / power-scene particle animation (components/flow/power-scene.tsx) */
+/* Energy-flow animation (components/flow/power-scene.tsx) */
 @media (prefers-reduced-motion: no-preference) {
   @keyframes flow-dash {
-    to { stroke-dashoffset: -40; }
+    to { stroke-dashoffset: -20; }
   }
   .flow-path {
-    stroke-dasharray: 6 10;
-    animation: flow-dash 1s linear infinite;
+    stroke-dasharray: 3 7;
+    animation: flow-dash 1.2s linear infinite;
   }
   .flow-path-reverse {
     animation-direction: reverse;
   }
 
-  @keyframes flow-particle {
-    0% { offset-distance: 0%; opacity: 0; }
-    10%, 90% { opacity: 1; }
-    100% { offset-distance: 100%; opacity: 0; }
+  @keyframes soft-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
   }
-  .flow-particle {
-    animation: flow-particle linear infinite;
+  .pulse-dot {
+    animation: soft-pulse 2s ease-in-out infinite;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .flow-path {
-    stroke-dasharray: 6 10;
+    stroke-dasharray: 3 7;
   }
-  .hud-scan::after,
-  .pulse-dot,
-  .spin-slow,
-  .spin-slow-reverse,
-  .rise-fade,
-  .flicker {
-    animation: none !important;
+  .flow-dot {
+    display: none;
   }
 }

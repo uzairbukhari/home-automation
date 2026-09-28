@@ -2,9 +2,8 @@
 
 import { useState, useTransition } from "react";
 import * as Switch from "@radix-ui/react-switch";
-import { Plug, Lightbulb, Thermometer, type LucideIcon } from "lucide-react";
+import { Plug, Lightbulb, Thermometer, Gauge, ToggleRight, DoorOpen, Router, Activity, WifiOff, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { StatusLed } from "@/components/hud/status-led";
 
 export interface DeviceStatusItem {
   code: string;
@@ -35,23 +34,35 @@ const SWITCH_CODE_RE = /^switch(_(led|\d+))?$/;
 
 function switchLabel(code: string): string {
   const m = code.match(/^switch_(\d+)$/);
-  return m ? m[1] : "Power";
+  return m ? `Gang ${m[1]}` : code === "switch_led" ? "Light" : "Power";
 }
 
-const CATEGORY_ICONS: Record<string, LucideIcon> = {
-  dj: Lightbulb,
-  wsdcg: Thermometer,
-  mcs: Thermometer,
+const CATEGORY_INFO: Record<string, { label: string; icon: LucideIcon; color: string }> = {
+  cz: { label: "Smart socket", icon: Plug, color: "var(--series-7)" },
+  pc: { label: "Power strip", icon: Plug, color: "var(--series-7)" },
+  kg: { label: "Wall switch", icon: ToggleRight, color: "var(--series-3)" },
+  dlq: { label: "Energy meter", icon: Gauge, color: "var(--series-1)" },
+  tdq: { label: "Breaker", icon: Gauge, color: "var(--series-1)" },
+  dj: { label: "Smart light", icon: Lightbulb, color: "var(--series-4)" },
+  wsdcg: { label: "Climate sensor", icon: Thermometer, color: "var(--series-5)" },
+  mcs: { label: "Door sensor", icon: DoorOpen, color: "var(--series-5)" },
+  wg2: { label: "Gateway", icon: Router, color: "var(--series-2)" },
 };
+
+export function categoryInfo(category: string) {
+  return CATEGORY_INFO[category] ?? { label: "Tuya device", icon: Plug, color: "var(--series-2)" };
+}
 
 function SwitchToggle({
   deviceId,
   code,
+  label,
   initialOn,
   online,
 }: {
   deviceId: string;
   code: string;
+  label: string;
   initialOn: boolean;
   online: boolean;
 }) {
@@ -75,91 +86,94 @@ function SwitchToggle({
   }
 
   return (
-    <Switch.Root
-      checked={on}
-      onCheckedChange={toggle}
-      disabled={pending || !online}
-      className={cn(
-        "rounded-full px-3.5 py-1.5 text-[11px] font-readout font-medium transition-colors disabled:opacity-40 border",
-        on
-          ? "bg-[color-mix(in_srgb,var(--status-good)_18%,transparent)] text-[var(--status-good)] border-[color-mix(in_srgb,var(--status-good)_45%,transparent)] shadow-[0_0_10px_-3px_var(--status-good)]"
-          : "bg-[var(--surface-2)] text-[var(--text-muted)] border-transparent"
-      )}
-    >
-      {switchLabel(code)}: {on ? "ON" : "OFF"}
-      <Switch.Thumb className="sr-only" />
-    </Switch.Root>
+    <label className={cn("flex items-center gap-2 text-xs", online ? "text-[var(--text-secondary)]" : "text-[var(--text-muted)]")}>
+      <Switch.Root
+        checked={on}
+        onCheckedChange={toggle}
+        disabled={pending || !online}
+        aria-label={`${label} ${on ? "on" : "off"}`}
+        className={cn(
+          "relative h-5 w-9 shrink-0 rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+          on ? "border-[var(--accent)] bg-[var(--accent)]" : "border-[var(--border-strong)] bg-[var(--surface-3)]"
+        )}
+      >
+        <Switch.Thumb
+          className={cn(
+            "block size-3.5 rounded-full shadow transition-transform",
+            on ? "translate-x-[18px] bg-[var(--accent-foreground)]" : "translate-x-[2px] bg-[var(--text-muted)]"
+          )}
+        />
+      </Switch.Root>
+      {label}
+    </label>
   );
 }
 
 export function DeviceCard({ device }: { device: DeviceCardData }) {
   const switchItems = device.status.filter((s) => SWITCH_CODE_RE.test(s.code) && typeof s.value === "boolean");
   const controllable = SWITCH_CATEGORIES.has(device.category) && switchItems.length > 0;
-  const Icon = CATEGORY_ICONS[device.category] ?? Plug;
+  const { label: kind, icon: Icon, color } = categoryInfo(device.category);
 
   const statusPower = device.status.find((s) => s.code === "cur_power")?.value;
   const powerW = device.powerW ?? (typeof statusPower === "number" ? statusPower / 10 : null);
+  const brightness = device.status.find((s) => s.code === "bright_value_v2" || s.code === "bright_value")?.value;
   const anyOn = switchItems.some((s) => s.value === true);
 
+  const reading =
+    powerW != null
+      ? { value: powerW >= 1000 ? (powerW / 1000).toFixed(2) : powerW.toFixed(1), unit: powerW >= 1000 ? "kW" : "W" }
+      : typeof brightness === "number"
+        ? { value: Math.round(brightness / 10).toString(), unit: "%" }
+        : controllable
+          ? { value: anyOn ? "On" : "Off", unit: "" }
+          : null;
+
   return (
-    <div className="glass-card p-4 flex flex-col gap-3">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span
-            className="rounded-lg p-2 shrink-0"
-            style={{
-              backgroundColor: anyOn
-                ? "color-mix(in srgb, var(--hud-accent) 16%, transparent)"
-                : "color-mix(in srgb, var(--text-muted) 12%, transparent)",
-              color: anyOn ? "var(--hud-accent)" : "var(--text-muted)",
-              boxShadow: anyOn ? "0 0 10px -3px var(--hud-accent)" : undefined,
-            }}
-          >
-            <Icon size={16} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-[var(--text-primary)] truncate">{device.name}</p>
-            {device.room && <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{device.room}</p>}
-          </div>
+    <div className={cn("tile flex flex-col gap-4 p-4 transition-colors hover:border-[var(--border-strong)]", !device.online && "opacity-75")}>
+      <div className="flex items-start gap-3.5">
+        <span
+          className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--surface-3)]"
+          style={{ color: device.online ? color : "var(--text-muted)" }}
+        >
+          <Icon size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 break-words text-[15px] font-semibold leading-snug text-[var(--text-primary)]" title={device.name}>
+            {device.name}
+          </p>
+          <p className="truncate text-xs text-[var(--text-muted)]">
+            {device.room ?? "Unassigned"} · {kind}
+          </p>
+          <p className={cn("mt-1.5 flex items-center gap-1 text-xs", device.online ? "text-[var(--status-good)]" : "text-[var(--text-muted)]")}>
+            {device.online ? <Activity size={12} /> : <WifiOff size={12} />}
+            {device.online ? "Online" : "Offline"}
+          </p>
         </div>
-        <StatusLed status={device.online ? "good" : "idle"} pulse={false} />
+        {reading && (
+          <div className="shrink-0 text-right">
+            <p className="text-lg font-bold tabular-nums leading-tight text-[var(--text-primary)]">
+              {reading.value}
+              {reading.unit && <span className="ml-0.5 text-xs font-semibold text-[var(--text-muted)]">{reading.unit}</span>}
+            </p>
+            {device.kwhToday != null && device.kwhToday > 0 && (
+              <p className="text-[11px] tabular-nums text-[var(--text-muted)]">{device.kwhToday.toFixed(2)} kWh today</p>
+            )}
+          </div>
+        )}
       </div>
 
-      {(powerW != null || device.kwhToday != null) && (
-        <div className="flex items-center gap-3 font-readout text-xs text-[var(--text-secondary)]">
-          {powerW != null && (
-            <span className="tabular-nums">
-              <span className="text-[var(--text-primary)] font-medium">{powerW.toFixed(1)}</span> W
-            </span>
-          )}
-          {device.kwhToday != null && device.kwhToday > 0 && (
-            <span className="tabular-nums text-[var(--text-muted)]">{device.kwhToday.toFixed(2)} kWh today</span>
-          )}
-        </div>
-      )}
-
-      {controllable ? (
-        <div className="flex flex-wrap gap-2">
+      {controllable && (
+        <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-[var(--border)] pt-3">
           {switchItems.map((s) => (
             <SwitchToggle
               key={s.code}
               deviceId={device.id}
               code={s.code}
+              label={switchItems.length > 1 ? switchLabel(s.code) : "Power"}
               initialOn={Boolean(s.value)}
               online={device.online}
             />
           ))}
-        </div>
-      ) : (
-        <div className="flex flex-wrap gap-x-3 gap-y-1">
-          {device.status.slice(0, 4).map((s) => (
-            <span key={s.code} className="text-xs text-[var(--text-muted)]">
-              {s.code}: <span className="text-[var(--text-secondary)]">{String(s.value)}</span>
-            </span>
-          ))}
-          {device.status.length === 0 && !device.online && (
-            <span className="text-xs text-[var(--text-muted)]">Offline</span>
-          )}
         </div>
       )}
     </div>

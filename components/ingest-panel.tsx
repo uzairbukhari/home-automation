@@ -3,8 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
-import { HudPanel } from "@/components/hud/hud-panel";
-import { StatusLed } from "@/components/hud/status-led";
+import { Panel } from "@/components/ui/panel";
+import { Pill } from "@/components/ui/pill";
+
+const SOURCE_LABELS: Record<string, string> = { dess: "DessMonitor", tuya: "Tuya Cloud" };
 
 export interface IngestRunRow {
   source: string;
@@ -45,37 +47,41 @@ export function IngestPanel({ runs, backfill }: { runs: IngestRunRow[]; backfill
   }
 
   return (
-    <HudPanel
-      title="Ingestion health"
-      icon={RefreshCw}
+    <Panel
+      eyebrow="Connections"
+      title="Data sources"
       action={
         <button
           onClick={runBackfillNow}
           disabled={pending}
-          className="rounded-lg bg-[var(--surface-2)] hover:bg-[color-mix(in_srgb,var(--hud-accent)_18%,var(--surface-2))] border border-[var(--border)] px-3 py-1.5 text-xs font-readout text-[var(--text-secondary)] disabled:opacity-50 transition-colors"
+          className="flex h-10 items-center gap-2 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-2)] px-3.5 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--text-primary)] disabled:opacity-50"
         >
+          <RefreshCw size={14} className={pending ? "animate-spin" : undefined} />
           {pending ? "Running…" : "Run backfill now"}
         </button>
       }
-      bodyClassName="flex flex-col gap-4 p-5"
+      bodyClassName="flex flex-col gap-5"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {["dess", "tuya"].map((source) => {
           const run = latestBySource.get(source);
           return (
-            <div key={source} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-2.5">
-              <div className="flex items-center gap-2">
-                <StatusLed status={run == null ? "idle" : run.ok ? "good" : "critical"} />
-                <span className="text-sm font-medium text-[var(--text-primary)] uppercase">{source}</span>
+            <div key={source} className="tile flex items-center justify-between gap-3 px-4 py-3.5">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[15px] font-semibold text-[var(--text-primary)]">{SOURCE_LABELS[source] ?? source}</span>
+                <Pill tone={run == null ? "neutral" : run.ok ? "good" : "bad"} className="w-fit">
+                  {run == null ? "No data yet" : run.ok ? "Connected" : "Failing"}
+                </Pill>
               </div>
               <div className="text-right">
-                <p className="font-readout text-xs text-[var(--text-secondary)]">
+                <p className="text-xs text-[var(--text-muted)]">Last poll</p>
+                <p className="text-sm tabular-nums text-[var(--text-secondary)]">
                   {/* Explicit locale + options: server (Node) and client (browser) default
                       locales can differ and produce different strings for the same Date,
                       which is a hydration mismatch — pin both to the same format. */}
                   {run ? new Date(run.startedAt).toLocaleTimeString("en-US", { hour12: false }) : "never"}
                 </p>
-                {run && !run.ok && <p className="text-[10px] text-[var(--status-critical)] max-w-[180px] truncate">{run.error}</p>}
+                {run && !run.ok && <p className="text-[11px] text-[var(--status-critical)] max-w-[200px] truncate" title={run.error ?? undefined}>{run.error}</p>}
               </div>
             </div>
           );
@@ -83,14 +89,14 @@ export function IngestPanel({ runs, backfill }: { runs: IngestRunRow[]; backfill
       </div>
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs uppercase tracking-wide text-[var(--text-muted)]">Backfill progress</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">History backfill</h3>
         {backfill.length === 0 ? (
           <p className="text-xs text-[var(--text-muted)]">Not started yet.</p>
         ) : (
           backfill.map((b) => (
-            <div key={b.source} className="flex items-center justify-between text-xs">
-              <span className="text-[var(--text-secondary)] uppercase">{b.source}</span>
-              <span className="font-readout text-[var(--text-primary)]">
+            <div key={b.source} className="flex items-center justify-between border-t border-[var(--border)] pt-2 text-sm">
+              <span className="text-[var(--text-secondary)]">{SOURCE_LABELS[b.source] ?? b.source}</span>
+              <span className="tabular-nums text-[var(--text-primary)]">
                 {b.doneAt ? "Complete" : b.cursorDate ? `At ${b.cursorDate}` : "Pending"}
                 {b.lastError && <span className="text-[var(--status-warning)]"> · stopped (see error)</span>}
               </span>
@@ -100,6 +106,6 @@ export function IngestPanel({ runs, backfill }: { runs: IngestRunRow[]; backfill
       </div>
 
       {message && <p className="text-xs text-[var(--text-muted)]">{message}</p>}
-    </HudPanel>
+    </Panel>
   );
 }

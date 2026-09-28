@@ -1,7 +1,7 @@
 "use client";
 
 import ReactECharts from "echarts-for-react";
-import { chartTheme, baseGrid, baseTooltip, baseAxisLabel, baseAxisLine, baseSplitLine, glowLineStyle } from "@/lib/chart-theme";
+import { chartTheme, baseGrid, baseTooltip, baseAxisLabel, baseAxisLine, baseSplitLine, lineStroke } from "@/lib/chart-theme";
 
 export interface RatioPoint {
   label: string;
@@ -13,14 +13,6 @@ export function RatioTrend({ points }: { points: RatioPoint[] }) {
   const option = {
     backgroundColor: "transparent",
     grid: baseGrid,
-    legend: {
-      top: 0,
-      left: 0,
-      textStyle: { color: chartTheme.textSecondary, fontSize: 12 },
-      icon: "roundRect",
-      itemWidth: 10,
-      itemHeight: 10,
-    },
     tooltip: {
       ...baseTooltip,
       valueFormatter: (v: number) => `${(v * 100).toFixed(0)}%`,
@@ -47,7 +39,7 @@ export function RatioTrend({ points }: { points: RatioPoint[] }) {
         smooth: true,
         showSymbol: false,
         data: points.map((p) => p.selfSufficiency),
-        lineStyle: glowLineStyle(chartTheme.series.solar),
+        lineStyle: lineStroke(chartTheme.series.solar),
       },
       {
         name: "Self-consumption",
@@ -55,7 +47,7 @@ export function RatioTrend({ points }: { points: RatioPoint[] }) {
         smooth: true,
         showSymbol: false,
         data: points.map((p) => p.selfConsumption),
-        lineStyle: glowLineStyle(chartTheme.series.battery),
+        lineStyle: lineStroke(chartTheme.series.battery),
       },
     ],
   };
