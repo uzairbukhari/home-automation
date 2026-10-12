@@ -5,7 +5,9 @@ import { after } from 'next/server';
 import { DessMonitorProvider } from './providers/dessmonitor';
 import { TuyaProvider } from './providers/tuya';
 import { applyRoomOverrides, collectTuya, storeTuyaLogs } from './tuya-store';
-import { cachedSnapshot, saveSnapshot, saveSamples, syncPeriods } from './solar-store';
+import { cachedSnapshot, saveSnapshot, saveSamples, saveRawFields, syncPeriods } from './solar-store';
+import { STORAGE_PRUNE_BYTES, storageBytes } from './backfill-ledger';
+import { alarmsUnit, documentsUnit, lookbackDays, tuyaEventsUnit } from './provider-sync';
 import { evaluateAutomations } from './automations';
 import { reconcileCommands } from './commands';
 import { evaluateAlerts } from './notifications';
@@ -17,12 +19,12 @@ export async function historyUnit(){
   const db=database(),turn=Math.floor(Date.now()/300000)%2;
   if(turn===0){const provider=new DessMonitorProvider(),snapshot=await cachedSnapshot(true,false);if(!snapshot)return{status:'no_solar_metadata'};const entity=snapshot.device.serial,row=await db.prepare('SELECT next_backfill_date FROM solar_sync_state WHERE entity_id=?').bind(entity).first<{next_backfill_date:string|null}>(),date=row?.next_backfill_date??shiftDate(localDate(),-1);let selectedDate=date;for(let days=1;days<=7;days++){const recent=shiftDate(localDate(),-days),covered=await db.prepare("SELECT status FROM history_coverage WHERE source='dessmonitor' AND entity_id=? AND date=?").bind(entity,recent).first();if(!covered){selectedDate=recent;break;}}
     const oldest=(await db.prepare("SELECT MIN(period) date FROM solar_energy_periods WHERE entity_id=? AND period_type='year'").bind(entity).first<{date:string|null}>())?.date??localDate().slice(0,4);if(selectedDate<oldest+'-01-01')return{status:'solar_backfill_complete'};
-    const history=await provider.getHistory(selectedDate,selectedDate,'raw');await saveSamples(entity,history.series);await db.prepare("INSERT INTO history_coverage(source,entity_id,date,status,recorded_at) VALUES ('dessmonitor',?,?,?,?) ON CONFLICT(source,entity_id,date) DO UPDATE SET status=excluded.status,recorded_at=excluded.recorded_at").bind(entity,selectedDate,history.sampleCount?'available':'missing',new Date().toISOString()).run();
-    await db.prepare('INSERT INTO solar_sync_state(entity_id,next_backfill_date) VALUES (?,?) ON CONFLICT(entity_id) DO UPDATE SET next_backfill_date=excluded.next_backfill_date').bind(entity,selectedDate===date?shiftDate(date,-1):date).run();return{source:'dessmonitor',date:selectedDate,samples:history.sampleCount};
+    const history=await provider.getDay(selectedDate);await saveSamples(entity,history.series);await saveRawFields(entity,history.rawFields);await db.prepare("INSERT INTO history_coverage(source,entity_id,date,status,recorded_at) VALUES ('dessmonitor',?,?,?,?) ON CONFLICT(source,entity_id,date) DO UPDATE SET status=excluded.status,recorded_at=excluded.recorded_at").bind(entity,selectedDate,history.series.length?'available':'missing',new Date().toISOString()).run();
+    await db.prepare('INSERT INTO solar_sync_state(entity_id,next_backfill_date) VALUES (?,?) ON CONFLICT(entity_id) DO UPDATE SET next_backfill_date=excluded.next_backfill_date').bind(entity,selectedDate===date?shiftDate(date,-1):date).run();return{source:'dessmonitor',date:selectedDate,samples:history.series.length};
   }
   const device=await db.prepare("SELECT c.id,c.capabilities FROM device_catalog c LEFT JOIN tuya_sync s ON c.id=s.device_id LEFT JOIN app_jobs j ON j.id='history:'||c.id WHERE c.source='tuya' AND (j.next_due IS NULL OR j.next_due<=strftime('%Y-%m-%dT%H:%M:%fZ','now')) ORDER BY COALESCE(j.updated_at,''),COALESCE(s.covered_through,'') LIMIT 1").first<{id:string;capabilities:string}>();if(!device)return{status:'no_devices'};
   return dueWork(`history:${device.id}`,0,async()=>{const {cachedDevices}=await import('./tuya-store'),current=(await cachedDevices(true)).find(d=>d.id===device.id)!;
-    const row=await db.prepare('SELECT * FROM tuya_sync WHERE device_id=?').bind(device.id).first<{from_ms:number|null;to_ms:number|null;cursor:string|null;covered_through:string|null}>(),end=Date.now(),from=row?.from_ms??(row?.covered_through?Date.parse(row.covered_through)-900000:end-90*86400000),to=row?.to_ms??Math.min(end,from+86400000);
+    const row=await db.prepare('SELECT * FROM tuya_sync WHERE device_id=?').bind(device.id).first<{from_ms:number|null;to_ms:number|null;cursor:string|null;covered_through:string|null}>(),end=Date.now(),from=row?.from_ms??(row?.covered_through?Date.parse(row.covered_through)-900000:end-lookbackDays()*86400000),to=row?.to_ms??Math.min(end,from+7*86400000);
     const codes=current.capabilities.map(c=>c.code);if(!codes.length)return{status:'unsupported',reason:'No verified history datapoints'};const page=await new TuyaProvider().getLogPage(device.id,codes,from,to,row?.cursor??'');
     if(page.has_more&&(!page.last_row_key||page.last_row_key===row?.cursor))throw new Error('History pagination did not advance');
     await storeTuyaLogs(current,page.logs??[]);
@@ -57,7 +59,10 @@ export async function maintainCollection(){
     try{await dueWork('solar-reconcile',86400000,async()=>{const today=localDate(),previous=shiftDate(today,-7);if(previous.slice(0,7)!==today.slice(0,7)){const errors=await syncPeriods(new DessMonitorProvider(),today.slice(0,4),previous.slice(0,7));if(errors.length)throw new Error(errors.join('; '));}});
       await dueWork('solar-period-backfill',300000,backfillPeriodUnit);
       await dueWork('history-unit',300000,historyUnit);
-      await dueWork('retention',300000,async()=>{const retained=await retentionStep();const catalog=await database().prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();for(const c of catalog.results)await rebuildLongPeriods(c.source,c.id);return retained;});
+      await dueWork('provider-documents',86400000,documentsUnit);
+      await dueWork('dessmonitor-alarms',3600000,alarmsUnit);
+      await dueWork('tuya-events',300000,tuyaEventsUnit);
+      await dueWork('retention',300000,async()=>{const bytes=await storageBytes(),retained=await retentionStep(bytes!==null&&bytes>STORAGE_PRUNE_BYTES);const catalog=await database().prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();for(const c of catalog.results)await rebuildLongPeriods(c.source,c.id);return retained;});
       await summarizeOperations();
     }catch(error){throw error;}
 }

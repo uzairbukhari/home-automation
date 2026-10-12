@@ -49,6 +49,14 @@ export class DessMonitorProvider implements MonitoringProvider {
   const all:SolarPoint[]=[];for(let i=0;i<dates.length;i+=4){const results=await Promise.all(dates.slice(i,i+4).map(async date=>{try{return points(await dayData(selected,date))}catch(error){if(error instanceof Error&&error.message.includes('ERR_NO_RECORD'))return[];throw error}}));results.forEach(result=>all.push(...result));}
   return{series:aggregatePoints(all,granularity),from,to,granularity,sampleCount:sortedPoints(all).length};
  }
+ async getDay(date:string){
+  if(!validDate(date))throw new Error('Choose a valid history date');
+  const selected=await inverter();let data:DayData;try{data=await dayData(selected,date)}catch(error){if(error instanceof Error&&error.message.includes('ERR_NO_RECORD'))return{series:[] as SolarPoint[],rawFields:[] as NonNullable<DessSnapshot['rawFields']>};throw error}
+  return{series:points(data),rawFields:(data.row??[]).flatMap(row=>{const stamp=timestamp(row.field[1]);return stamp?[{sourceTimestamp:stamp,fields:Object.fromEntries(fieldMap(data,row.field))}]:[]})};
+ }
+ // Raw device list: every attribute DessMonitor exposes for the plant's devices.
+ async getDeviceInfo(){const data=await call<{device:Array<Record<string,unknown>>}>('&action=queryDevices&page=0&pagesize=50');return data.device??[];}
+ async getAlarms(page=0){const selected=await inverter(),data=await call<Record<string,unknown>>(`&action=queryDeviceWarning&i18n=en_US${identity(selected)}&page=${page}&pagesize=50`),list=Object.values(data).find(Array.isArray) as Array<Record<string,unknown>>|undefined;return{entityId:selected.sn,alarms:list??[],more:Number(data.total??0)>(page+1)*50};}
  async getEnergyPeriods(type:'day'|'month'|'year',date=localDate().slice(0,type==='day'?7:4)):Promise<ProviderPeriods>{
   const selected=await inverter(),key=`${selected.sn}:${type}:${date}`,cached=periodsCache.get(key);if(cached&&cached.expiresAt>Date.now())return cached.data;
   const keys=await call<{keys:string[]}>(`&action=querySPKeyParameters&devcode=${selected.devcode}`),solarParameter=type==='day'?'ENERGY_TODAY':'ENERGY_TOTAL',gridParameter=type==='day'?'ENERGY_TODAY_FROM_GRID':'ENERGY_TOTAL_FROM_GRID';

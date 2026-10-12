@@ -37,3 +37,12 @@ npx wrangler d1 execute home-dashboard --remote --file home-dashboard-export.sql
 cron-job.org: URL `https://home-dashboard.<your-subdomain>.workers.dev/api/mobile/collect`,
 method POST, header `x-collection-secret: <NOTIFICATION_COLLECTION_SECRET>`, every 5 minutes.
 Disable the old job so only one collects.
+
+## Data kept locally
+
+The collector stores everything Tuya and DessMonitor expose so pages never call the providers:
+
+- DessMonitor: every inverter field for every past day (backfilled from the inverter's first year), day/month/year energy totals, alarm history, device info.
+- Tuya: device data-point logs and the device event log (online/offline, activation) as far back as Tuya retains them (`TUYA_HISTORY_DAYS`, default 365), plus raw device details, homes, rooms and scenes. Local-control keys are never stored.
+- Raw records are kept until the database reaches 4 GB; after that the oldest verified days are summarized and pruned. Daily/monthly/yearly summaries are permanent.
+- Progress and gaps per provider, device and dataset are in the Collection & Storage settings page (`provider_backfill`).
