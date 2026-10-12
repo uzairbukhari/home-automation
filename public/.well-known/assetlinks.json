@@ -1,0 +1,14 @@
+[
+  {
+    "target": {
+      "sha256_cert_fingerprints": [
+        "E4:E3:7E:31:7C:23:D4:63:70:8C:2B:BB:8D:01:74:00:B3:EB:2B:52:31:B9:5B:44:D6:89:A9:B8:D3:F9:5F:1F"
+      ],
+      "namespace": "android_app",
+      "package_name": "com.photon.energyhome"
+    },
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ]
+  }
+]

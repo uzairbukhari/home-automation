@@ -1,13 +1,21 @@
-import { NextResponse } from "next/server";
-import { getSettings, upsertSettings } from "@/lib/queries";
-import type { TariffSettings } from "@/lib/metrics";
-
-export async function GET() {
-  return NextResponse.json(await getSettings());
-}
-
-export async function PUT(request: Request) {
-  const body = (await request.json()) as Partial<TariffSettings>;
-  const updated = await upsertSettings(body);
-  return NextResponse.json(updated);
+import { env } from 'cloudflare:workers';
+import { getOwnerUser } from '@/lib/owner-auth';
+import { savedSettings } from '@/lib/settings-store';
+import { parseTariffSettings } from '@/lib/tariff';
+import { validDate } from '@/lib/measurements';
+function number(value:unknown,min:number,max:number){if(value===null||value===''||typeof value==='boolean')throw new Error('Invalid numeric setting');const parsed=Number(value);if(!Number.isFinite(parsed)||parsed<min||parsed>max)throw new Error('Invalid numeric setting');return parsed;}
+export async function GET(){const user=await getOwnerUser();if(!user)return Response.json({error:'Unauthorized'},{status:401});try{return Response.json(await savedSettings(user.userId),{headers:{'cache-control':'private, no-store'}})}catch(error){return Response.json({error:error instanceof Error?error.message:'Settings unavailable'},{status:503})}}
+export async function PUT(request:Request){
+ const user=await getOwnerUser();if(!user)return Response.json({error:'Unauthorized'},{status:401});
+ if(request.headers.get('origin')&&request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Invalid request origin'},{status:403});
+ try{if(!env.DB)throw new Error('Settings storage is unavailable');
+ const body=await request.json() as Record<string,unknown>,previous=await savedSettings(user.userId),input={...previous,...body},tariff=parseTariffSettings(input.tariffSettings);
+ if(!['unknown','filer','non-filer'].includes(tariff.taxStatus))throw new Error('Choose a valid tax status');
+ if(tariff.dutyPercent!==null)tariff.dutyPercent=number(tariff.dutyPercent,0,10);
+ if(typeof tariff.periodAdjustments!=='object'||!tariff.periodAdjustments||Array.isArray(tariff.periodAdjustments)||Object.keys(tariff.periodAdjustments).length>120)throw new Error('Invalid billing adjustments');
+ for(const [date,adjustment] of Object.entries(tariff.periodAdjustments)){if(!validDate(date)||!adjustment||typeof adjustment!=='object')throw new Error('Choose a valid billing cycle date');for(const key of ['fpaPerKwh','qtaPerKwh','fcPerKwh'] as const)if(adjustment[key]!==null)adjustment[key]=number(adjustment[key],-100,100);}
+ const values={unitRate:number(input.unitRate,0,1000),referenceRate:number(input.referenceRate,0,1000),fixedCharges:number(input.fixedCharges,0,1000000),adjustments:number(input.adjustments,-1000000,1000000),billingDay:number(input.billingDay,1,28),capacity:number(input.capacity,.1,1000),threshold:number(input.threshold,1,99),timeOfUse:Boolean(input.timeOfUse),peakRate:number(input.peakRate,0,1000),offPeakRate:number(input.offPeakRate,0,1000),peakStart:String(input.peakStart),peakEnd:String(input.peakEnd),tariffSettings:tariff};
+ if(!Number.isInteger(values.billingDay)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(values.peakStart)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(values.peakEnd))throw new Error('Invalid billing day or peak hours');
+ await env.DB.prepare(`INSERT INTO user_settings (user_id,unit_rate,reference_rate,fixed_charges,adjustments,billing_day,battery_capacity,battery_threshold,time_of_use,peak_rate,off_peak_rate,peak_start,peak_end,tariff_settings) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET unit_rate=excluded.unit_rate,reference_rate=excluded.reference_rate,fixed_charges=excluded.fixed_charges,adjustments=excluded.adjustments,billing_day=excluded.billing_day,battery_capacity=excluded.battery_capacity,battery_threshold=excluded.battery_threshold,time_of_use=excluded.time_of_use,peak_rate=excluded.peak_rate,off_peak_rate=excluded.off_peak_rate,peak_start=excluded.peak_start,peak_end=excluded.peak_end,tariff_settings=excluded.tariff_settings,updated_at=CURRENT_TIMESTAMP`).bind(user.userId,values.unitRate,values.referenceRate,values.fixedCharges,values.adjustments,values.billingDay,values.capacity,values.threshold,values.timeOfUse?1:0,values.peakRate,values.offPeakRate,values.peakStart,values.peakEnd,JSON.stringify(tariff)).run();await env.DB.prepare('INSERT INTO settings_versions(user_id,effective_at,data) VALUES (?,?,?)').bind(user.userId,new Date().toISOString(),JSON.stringify(values)).run();return Response.json({saved:true,settings:values});
+ }catch(error){return Response.json({error:error instanceof Error?error.message:'Invalid settings'},{status:400})}
 }

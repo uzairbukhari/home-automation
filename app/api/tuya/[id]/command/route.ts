@@ -1,20 +1,3 @@
-import { NextResponse } from "next/server";
-import { sendCommand } from "@/lib/tuya/client";
-
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const { commands } = (await request.json()) as {
-    commands?: Array<{ code: string; value: string | number | boolean }>;
-  };
-
-  if (!commands?.length) {
-    return NextResponse.json({ error: "commands is required" }, { status: 400 });
-  }
-
-  try {
-    await sendCommand(id, commands);
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 502 });
-  }
-}
+import { getOwnerUser, sameOrigin } from '@/lib/owner-auth';
+import { executeCommand } from '@/lib/commands';
+export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){if(!await getOwnerUser())return Response.json({error:'Unauthorized'},{status:401});if(!sameOrigin(request))return Response.json({error:'Invalid request origin'},{status:403});try{const {id}=await params,body=await request.json() as {code:string;value:unknown};const result=await executeCommand(id,body.code,body.value,{confirm:true});return Response.json(result,{status:result.status==='failed'?400:200});}catch(error){return Response.json({error:String(error)},{status:400});}}

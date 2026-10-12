@@ -1,0 +1,3 @@
+import { env } from 'cloudflare:workers';
+import { runCollection } from '@/lib/collection';
+export async function POST(request:Request){const e=env as unknown as Record<string,unknown>,supplied=request.headers.get('x-collection-secret');if(!supplied||![e.NOTIFICATION_COLLECTION_SECRET,e.NOTIFICATION_SCHEDULE_SECRET].some(v=>typeof v==='string'&&v&&v===supplied))return Response.json({error:'Unauthorized'},{status:401});try{const result=await runCollection();return Response.json(result,{status:result.status==='failed'?502:200});}catch(error){return Response.json({error:String(error)},{status:502});}}

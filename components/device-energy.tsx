@@ -1,0 +1,13 @@
+'use client';
+import {useUrlState} from '@/hooks/use-app-navigation';
+import {useEffect,useState} from 'react';
+import {Bar,BarChart,CartesianGrid,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
+import type {deviceEnergy} from '@/lib/device-energy';
+type Energy=Awaited<ReturnType<typeof deviceEnergy>>;
+export default function DeviceEnergy({id}:{id:string}){
+ const [range,setRange]=useUrlState('deviceEnergyPeriod','7',['7','30','months']),[data,setData]=useState<Energy|null>(null),[error,setError]=useState('');
+ useEffect(()=>{const controller=new AbortController();fetch(`/api/devices/tuya/${encodeURIComponent(id)}/energy?range=${range}`,{signal:controller.signal}).then(async r=>{const value=await r.json() as Energy & {error?:string};if(!r.ok)throw new Error(value.error??'Energy unavailable');setData(value);setError('');}).catch(e=>{if(!controller.signal.aborted)setError(String(e));});return()=>controller.abort();},[id,range]);
+ return <section className="device-energy"><div className="section-heading"><div><span className="eyebrow">Measured consumption</span><h3>Energy use</h3></div><select aria-label="Energy period" value={range} onChange={e=>{setData(null);setRange(e.target.value);}}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="months">Calendar months</option></select></div>
+ {error?<p role="alert">{error}</p>:!data?<p role="status">Loading energy history…</p>:<><div className="energy-total"><strong>{data.totalKwh===null?'—':data.totalKwh.toLocaleString('en',{maximumFractionDigits:2})}</strong><span>kWh {data.partial?'· partial coverage':''}</span></div>{data.status==='available'&&<div className="device-history-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.buckets}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="date" tickFormatter={v=>String(v).slice(5)} minTickGap={22}/><YAxis unit=" kWh" width={65}/><Tooltip formatter={(value)=>value==null?'Unavailable':`${Number(value).toFixed(3)} kWh`} contentStyle={{background:'var(--popover)',border:'1px solid var(--border)',borderRadius:12}}/><Bar dataKey="kwh" name="Measured energy" fill="var(--energy-home)" radius={[5,5,0,0]} isAnimationActive={false}/></BarChart></ResponsiveContainer></div>}<p className="report-footnote">{data.note}</p><details><summary>Daily coverage</summary><div className="energy-data-table"><table><thead><tr><th>Period</th><th>kWh</th><th>Coverage</th></tr></thead><tbody>{data.buckets.map(b=><tr key={b.date}><td>{b.date}</td><td>{b.kwh===null?'Unavailable':b.kwh.toFixed(3)}</td><td>{b.partial?'Partial':'Complete'}</td></tr>)}</tbody></table></div></details></>}
+ </section>;
+}

@@ -1,0 +1,3 @@
+import { getOwnerUser } from '@/lib/owner-auth';
+import { database } from '@/lib/jobs';
+export async function GET(){if(!await getOwnerUser())return Response.json({error:'Unauthorized'},{status:401});const rows=await database().prepare('SELECT * FROM connection_state').all<{provider:string;status:string;last_success_at:string|null;last_error_code:string|null}>();return Response.json({providers:['dessmonitor','tuya'].map(provider=>{const row=rows.results.find(r=>r.provider===provider);return{provider,status:row?.status??'not_configured',lastSuccessAt:row?.last_success_at??null,blocker:row?.last_error_code??null};})},{headers:{'cache-control':'private, no-store'}});}

@@ -1,42 +1,31 @@
 import type { Metadata } from "next";
-import { Rajdhani, Orbitron, JetBrains_Mono } from "next/font/google";
-import "./globals.css";
-
-// Body text: a technical, slightly condensed sans that still reads well at
-// small sizes for labels and copy.
-const body = Rajdhani({
-  variable: "--font-body",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-// Headings / panel titles / nav labels: a geometric, wide-tracked display
-// face — the single biggest lever for the "sci-fi HUD" read.
-const display = Orbitron({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-});
-
-// Numeric readouts (watts, %, kWh, clock) — tabular figures, monospace.
-const readout = JetBrains_Mono({
-  variable: "--font-readout",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
+import "./site.css";
+import { getOwnerUser } from '@/lib/owner-auth';
+import {NavigationPrompts} from '@/components/navigation-prompts';
+import {appearanceScript,AppearanceListener} from '@/components/appearance-settings';
+import {PhotonShell} from '@/components/app-shell';
+import { MobileSupport } from '@/components/mobile-support';
 
 export const metadata: Metadata = {
-  title: "Solar Dashboard",
-  description: "Live monitoring for the home solar, battery, and Tuya devices.",
+  title: "Photon Energy Home",
+  description: "Private solar, battery, grid and smart-home monitoring for a Photon hybrid system.",
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+  },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  const user=await getOwnerUser();
   return (
-    <html
-      lang="en"
-      className={`${body.variable} ${display.variable} ${readout.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <head>{process.env.NODE_ENV==='development'&&<script dangerouslySetInnerHTML={{__html:`if('serviceWorker' in navigator&&navigator.serviceWorker.controller){navigator.serviceWorker.getRegistrations().then(async registrations=>{for(const registration of registrations)if(registration.scope===location.origin+'/')await registration.unregister();location.reload();});}`}}/>}<script dangerouslySetInnerHTML={{__html:appearanceScript}}/>{user&&<meta name="photon-account" content={user.userId}/>}<meta name="theme-color" content="#09111f"/></head>
+      <body className="antialiased"><AppearanceListener/><NavigationPrompts/><MobileSupport accountId={user?.userId??null}>{user?<PhotonShell>{children}</PhotonShell>:children}</MobileSupport></body>
     </html>
   );
 }
