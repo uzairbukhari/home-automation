@@ -1,10 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { getChatGPTUser, chatGPTSignInPath } from '@/app/chatgpt-auth';
+import { getSessionUser, signInPath } from '@/app/session-auth';
+import { safeReturnPath } from '@/lib/session';
 import { redirect } from 'next/navigation';
 
 // Fail closed: opening static assets at the host must never open home data.
 export async function getOwnerUser() {
-  const user = await getChatGPTUser();
+  const user = await getSessionUser();
   const owner = (env as unknown as Record<string, unknown>).DASHBOARD_OWNER_EMAIL;
   return user && typeof owner === 'string' && owner.trim() &&
     user.email?.toLowerCase() === owner.trim().toLowerCase() ? user : null;
@@ -13,8 +14,7 @@ export async function getOwnerUser() {
 export async function requireOwnerUser(returnTo: string) {
   const user = await getOwnerUser();
   if (user) return user;
-  if (!(await getChatGPTUser())) redirect(chatGPTSignInPath(returnTo));
-  redirect('/access-denied');
+  redirect(signInPath(safeReturnPath(returnTo)));
 }
 
 export function sameOrigin(request: Request) {
