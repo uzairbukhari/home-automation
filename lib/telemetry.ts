@@ -1,5 +1,6 @@
 import { actualSolarReport, actualSummary } from './actual-energy';
 import { database } from './jobs';
+import { ledgerRow, saveLedger } from './backfill-ledger';
 import { localDate, shiftDate } from './measurements';
 import { decodeTuya } from './tuya-format';
 import type { TuyaCapability } from './providers/tuya';
@@ -81,8 +82,23 @@ export async function rebuildLongPeriods(source:string,entity:string){
   for(let i=0;i<statements.length;i+=80)await db.batch(statements.slice(i,i+80));
 }
 // Bounded migration/retention work: only delete the day just verified. Interrupted work resumes.
-export async function retentionStep(){
+// Raw records are kept forever until storage nears the D1 limit; days older than 90 days are still summarized
+// (one ledger cursor per entity) because long-range reports read the permanent daily summaries.
+async function summaryStep(cutoff:string){
+  const db=database(),entities=await db.prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();
+  for(const entity of entities.results){
+    const ledger=await ledgerRow(entity.source,entity.id,'summary');let day:string|null=null;
+    if(ledger?.covered_through)day=shiftDate(ledger.covered_through,1);
+    else{const first=entity.source==='tuya'?await db.prepare('SELECT MIN(source_timestamp) stamp FROM tuya_device_state WHERE device_id=?').bind(entity.id).first<{stamp:string|null}>():await db.prepare('SELECT MIN(source_timestamp) stamp FROM solar_samples WHERE entity_id=?').bind(entity.id).first<{stamp:string|null}>();if(first?.stamp)day=localDate(first.stamp);}
+    if(!day||day>=cutoff)continue;
+    let last=day;for(let n=0;n<3&&last<cutoff;n++,last=shiftDate(last,1)){if(entity.source==='tuya')await summarizeTuyaDay(entity.id,last);else await summarizeSolarDay(entity.id,last);await saveLedger(entity.source,entity.id,'summary',{status:'running',oldest_covered:ledger?.oldest_covered??day,covered_through:last,error:null});}
+    await rebuildLongPeriods(entity.source,entity.id);return{summarized:{source:entity.source,entity:entity.id,through:shiftDate(last,-1)}};
+  }
+  return{summarized:null};
+}
+export async function retentionStep(prune=true){
   const db=database(),cutoff=shiftDate(localDate(),-90),cutoffStamp=new Date(`${cutoff}T00:00:00+05:00`).toISOString();
+  if(!prune){await db.prepare("DELETE FROM telemetry_summaries WHERE granularity='hour' AND period<?").bind(cutoff).run();return{...await summaryStep(cutoff),cutoff,pruning:false};}
   const old=await db.prepare("SELECT 'tuya' source,device_id entity_id,MIN(source_timestamp) stamp FROM tuya_device_state WHERE source_timestamp<? GROUP BY device_id UNION ALL SELECT 'tuya',device_id,MIN(observed_at) FROM tuya_observations WHERE observed_at<? GROUP BY device_id UNION ALL SELECT 'dessmonitor',entity_id,MIN(source_timestamp) FROM solar_samples WHERE source_timestamp<? GROUP BY entity_id ORDER BY stamp LIMIT 1").bind(cutoffStamp,cutoffStamp,cutoffStamp).first<{source:string;entity_id:string;stamp:string}>();
   if(old){const date=localDate(old.stamp);if(old.source==='tuya')await summarizeTuyaDay(old.entity_id,date);else await summarizeSolarDay(old.entity_id,date);await rebuildLongPeriods(old.source,old.entity_id);
     const verified=await db.prepare("SELECT COUNT(*) n FROM telemetry_summaries WHERE source=? AND entity_id=? AND granularity='day' AND period=?").bind(old.source,old.entity_id,date).first<{n:number}>();if(!verified?.n)throw new Error('Retention blocked: daily summary is not verified');

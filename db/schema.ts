@@ -267,3 +267,17 @@ export const periodCoverage = sqliteTable('period_coverage', {
 export const upgradeBackup = sqliteTable('upgrade_backup', {
   kind:text('kind').notNull(), record_key:text('record_key').notNull(), data:text('data').notNull(),
 },t=>[primaryKey({columns:[t.kind,t.record_key]})]);
+export const providerBackfill = sqliteTable('provider_backfill', {
+  provider:text('provider').notNull(), entity_id:text('entity_id').notNull(), dataset:text('dataset').notNull(),
+  oldest_covered:text('oldest_covered'), covered_through:text('covered_through'), cursor:text('cursor'),
+  status:text('status').notNull().default('pending'), rows_total:integer('rows_total').notNull().default(0),
+  error:text('error'), updated_at:text('updated_at').notNull(),
+},t=>[primaryKey({columns:[t.provider,t.entity_id,t.dataset]})]);
+export const providerDocuments = sqliteTable('provider_documents', {
+  provider:text('provider').notNull(), entity_id:text('entity_id').notNull(), dataset:text('dataset').notNull(),
+  data:text('data').notNull(), first_seen_at:text('first_seen_at').notNull(), updated_at:text('updated_at').notNull(),
+},t=>[primaryKey({columns:[t.provider,t.entity_id,t.dataset]})]);
+export const providerEvents = sqliteTable('provider_events', {
+  provider:text('provider').notNull(), entity_id:text('entity_id').notNull(), event_time:text('event_time').notNull(),
+  kind:text('kind').notNull(), code:text('code').notNull().default(''), data:text('data').notNull(),
+},t=>[primaryKey({columns:[t.provider,t.entity_id,t.event_time,t.kind,t.code]})]);

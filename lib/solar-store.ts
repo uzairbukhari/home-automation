@@ -1,7 +1,7 @@
 import { actualSolarReport } from './actual-energy';
 import { env } from 'cloudflare:workers';
 import { DessMonitorProvider, type DessSnapshot, type ProviderPeriods } from './providers/dessmonitor';
-import { aggregatePoints, energyReport, sortedPoints, type SolarPoint, type EnergyBucket, type EnergyReport } from './solar-energy';
+import { energyReport, sortedPoints, type SolarPoint, type EnergyBucket, type EnergyReport } from './solar-energy';
 import { localDate, shiftDate } from './measurements';
 import { summarizeSolarDay } from './telemetry';
 
@@ -34,21 +34,18 @@ export async function storedPeriods(entityId:string,type:'day'|'month'|'year',fr
  const rows=await db().prepare('SELECT * FROM solar_energy_periods WHERE entity_id=? AND period_type=? AND period>=? AND period<=? ORDER BY period').bind(entityId,type,from,to).all<PeriodRow>();
  return rows.results.map(row=>({date:row.period,solar:row.solar_source.startsWith('provider:')||row.solar_source==='counter'?row.solar_kwh:null,grid:row.grid_source.startsWith('provider:')||row.grid_source==='measured-days'?row.grid_kwh:null,home:null,source:row.solar_source,gridSource:row.grid_source,coveredHours:row.covered_hours,partial:Boolean(row.partial),report:row.report_json?actualSolarReport(JSON.parse(row.report_json) as EnergyReport):null,updatedAt:row.updated_at}));
 }
+export async function saveRawFields(entityId:string,rawFields:NonNullable<DessSnapshot['rawFields']>){
+ await batch(rawFields.map(item=>db().prepare('INSERT INTO solar_raw_fields(entity_id,source_timestamp,data,collected_at) VALUES (?,?,?,?) ON CONFLICT(entity_id,source_timestamp) DO UPDATE SET data=excluded.data,collected_at=excluded.collected_at WHERE solar_raw_fields.data!=excluded.data').bind(entityId,item.sourceTimestamp,JSON.stringify(item.fields),new Date().toISOString())));
+}
 export async function saveSnapshot(snapshot:DessSnapshot){
  await saveSamples(snapshot.device.serial,snapshot.series);
- await batch((snapshot.rawFields??[]).map(item=>db().prepare('INSERT INTO solar_raw_fields(entity_id,source_timestamp,data,collected_at) VALUES (?,?,?,?) ON CONFLICT(entity_id,source_timestamp) DO UPDATE SET data=excluded.data,collected_at=excluded.collected_at WHERE solar_raw_fields.data!=excluded.data').bind(snapshot.device.serial,item.sourceTimestamp,JSON.stringify(item.fields),new Date().toISOString())));
+ await saveRawFields(snapshot.device.serial,snapshot.rawFields??[]);
  await db().prepare("INSERT INTO device_catalog (id,source,name,category,online,capabilities) VALUES (?,'dessmonitor',?,'inverter',1,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,capabilities=excluded.capabilities,updated_at=CURRENT_TIMESTAMP").bind(snapshot.device.serial,snapshot.device.name,JSON.stringify({...snapshot,series:[],rawFields:undefined})).run();
 }
 export async function cachedSnapshot(preserveQuality=false,includeSeries=true):Promise<DessSnapshot|null>{
  const row=await db().prepare("SELECT capabilities FROM device_catalog WHERE source='dessmonitor' ORDER BY updated_at DESC LIMIT 1").first<{capabilities:string}>();if(!row)return null;
  const snapshot=JSON.parse(row.capabilities) as DessSnapshot;
  return{...snapshot,readings:preserveQuality?snapshot.readings:snapshot.readings.map(r=>({...r,quality:r.value===null?'missing':'stale'})),series:includeSeries?await storedSamples(snapshot.device.serial,localDate(),localDate()):[]};
-}
-export async function solarHistory(from:string,to:string,granularity:'raw'|'hour'|'day',provider=new DessMonitorProvider()){
- let entity:string,error:string|undefined;try{entity=(await provider.getIdentity()).serial;}catch(reason){const snapshot=await cachedSnapshot();if(!snapshot)throw reason;entity=snapshot.device.serial;error=reason instanceof Error?reason.message:'Provider unavailable';}
- try{const history=await provider.getHistory(from,to,'raw');await saveSamples(entity,history.series);}catch(reason){error=reason instanceof Error?reason.message:'Provider history is unavailable';}
- const points=await storedSamples(entity,from,to);if(!points.length&&error)throw new Error(error);
- return{series:aggregatePoints(points,granularity),from,to,granularity,sampleCount:points.length,source:'database',stale:Boolean(error),error};
 }
 export async function syncPeriods(provider:DessMonitorProvider,year:string,month=localDate().slice(0,7)){
  const errors:string[]=[];
