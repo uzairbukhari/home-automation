@@ -35,6 +35,14 @@ data class SolarLatest(
     val stale: Boolean = false,
 ) {
     fun value(metric: String): Double? = readings.firstOrNull { it.metric == metric }?.value
+
+    /** Signed battery power in watts: positive while charging, negative while discharging; null without voltage. */
+    fun batteryWatts(): Double? = batteryPower(value("battery_voltage"), value("battery_charge_current"), value("battery_discharge_current"))
+}
+
+fun batteryPower(voltage: Double?, chargeA: Double?, dischargeA: Double?): Double? {
+    if (voltage == null) return null
+    return voltage * ((chargeA ?: 0.0) - (dischargeA ?: 0.0))
 }
 
 @Serializable

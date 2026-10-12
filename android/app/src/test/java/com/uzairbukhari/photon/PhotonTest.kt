@@ -10,7 +10,9 @@ import com.uzairbukhari.photon.data.SolarLatest
 import com.uzairbukhari.photon.data.normalizeServerUrl
 import com.uzairbukhari.photon.ui.freshnessLabel
 import com.uzairbukhari.photon.ui.isStale
+import com.uzairbukhari.photon.data.batteryPower
 import com.uzairbukhari.photon.ui.kilowatts
+import com.uzairbukhari.photon.ui.nextPollDelayMs
 import com.uzairbukhari.photon.ui.parseInstant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -182,5 +184,20 @@ class UpdateAndAlertTest {
         assertEquals(1, feed.alerts.size)
         assertEquals("", feed.alerts[0].url)
         assertEquals(7L, feed.latest)
+    }
+
+    @Test fun batteryPowerIsSignedAndNeedsVoltage() {
+        assertEquals(1200.0, batteryPower(48.0, 25.0, 0.0)!!, 0.001)
+        assertEquals(-480.0, batteryPower(48.0, 0.0, 10.0)!!, 0.001)
+        assertEquals(0.0, batteryPower(48.0, null, null)!!, 0.001)
+        assertNull(batteryPower(null, 5.0, 0.0))
+    }
+
+    @Test fun pollWaitsForNextCollectionButNeverBelowAMinute() {
+        val now = 1_000_000_000L
+        assertEquals(60_000L, nextPollDelayMs(null, now))
+        assertEquals(60_000L, nextPollDelayMs(now - 290_000, now)) // due in 30 s, clamped up
+        assertEquals(200_000L, nextPollDelayMs(now - 120_000, now) )
+        assertEquals(60_000L, nextPollDelayMs(now - 3_600_000, now)) // stale: keep checking each minute
     }
 }

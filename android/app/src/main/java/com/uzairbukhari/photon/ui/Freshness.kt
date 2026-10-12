@@ -23,6 +23,13 @@ fun isStale(observedAtMillis: Long?, nowMillis: Long = System.currentTimeMillis(
     return age < -5_000 || age > EXPECTED_INTERVAL_MS * 2 + 60_000
 }
 
+/** Next Overview reload: shortly after the next 5-minute collection is due, never faster than 60 s. */
+fun nextPollDelayMs(observedAtMillis: Long?, nowMillis: Long = System.currentTimeMillis()): Long {
+    if (observedAtMillis == null) return 60_000L
+    val due = observedAtMillis + EXPECTED_INTERVAL_MS + 20_000L - nowMillis
+    return due.coerceIn(60_000L, EXPECTED_INTERVAL_MS)
+}
+
 fun parseInstant(text: String?): Long? = text?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
 
 fun kilowatts(watts: Double?): String = if (watts == null) "—" else "%.2f".format(watts / 1000)
