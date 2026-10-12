@@ -54,7 +54,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
     Overview("Overview", Icons.Filled.Home),
     Energy("Energy", Icons.Filled.WbSunny),
     Devices("Devices", Icons.Filled.Devices),
-    Automations("Automations", Icons.Filled.Tune),
+    Automations("Automate", Icons.Filled.Tune),
     Settings("Settings", Icons.Filled.Settings),
 }
 
