@@ -12,3 +12,5 @@
 .hero-card .updated:empty{display:none}
 .device-offline-pill{display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border:1px solid var(--border);border-radius:999px;background:var(--muted);color:var(--muted-foreground);font-size:.75rem;font-weight:600;white-space:nowrap}
 @media(max-width:767px){.device-toolbar .device-search{grid-column:1/-1;min-height:44px}.device-toolbar>button:first-of-type{width:100%}}
+.chart-summary .series-controls{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center}
+.billing-empty{color:var(--muted-foreground);font-size:.9375rem;line-height:1.5;padding:12px 0}

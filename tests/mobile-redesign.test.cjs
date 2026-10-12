@@ -152,7 +152,7 @@ test('Report destinations preserve the Appliances address and Billing deep link'
  const fresh=()=>{for(const key of Object.keys(require.cache))if(/components[\\/](app-shell|presentation)\.tsx$/.test(key))delete require.cache[key];};fresh();
  let html;try{const React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),{ReportNavigation}=require('../components/presentation.tsx');
  html=renderToStaticMarkup(React.createElement(ReportNavigation,{selected:'billing'}));}finally{Module._load=load;fresh();}
- assert.match(html,/href="\/reports"/);assert.match(html,/aria-current="page" href="\/solar\?section=reports&amp;report=billing"/);
+ assert.match(html,/href="\/solar\?section=reports&amp;report=appliances"/);assert.match(html,/aria-current="page" href="\/solar\?section=reports&amp;report=billing"/);
 });
 test('Settings category switches require a decision for unsaved edits',async()=>{
  const h=navigationHarness('https://photon.test/settings?category=battery'),[,category]=h.exports.useUrlState('category','');h.effects.forEach(run=>run());
