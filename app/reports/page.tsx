@@ -1,4 +1,5 @@
+import { redirect } from 'next/navigation';
 import { requireOwnerUser } from '@/lib/owner-auth';
-import { ReportScreen } from '@/components/report-screen';
 export const dynamic='force-dynamic';
-export default async function Page(){await requireOwnerUser('/reports');return <ReportScreen/>;}
+// Appliance reports now live in Energy > Reports; keep the old address working for bookmarks.
+export default async function Page(){await requireOwnerUser('/solar?section=reports&report=appliances');redirect('/solar?section=reports&report=appliances');}
