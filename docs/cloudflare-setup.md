@@ -26,7 +26,7 @@ Names are in `.env.example`. The important ones:
 - `DASHBOARD_OWNER_EMAIL`, `OWNER_USER_ID` (must equal the `user_id` in your exported data)
 - `DASHBOARD_PASSWORD_HASH`: run `npm run hash-password -- "a long password"`
 - `SESSION_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`, `NOTIFICATION_COLLECTION_SECRET`: random strings (`openssl rand -base64 32`)
-- Provider logins (`DESSMONITOR_*`, `TUYA_*`) and push keys (`VAPID_*`) as in `.env.example`
+- Provider logins (`DESSMONITOR_*`, `TUYA_*` (`TUYA_ENDPOINT` is a URL, e.g. `https://openapi.tuyaeu.com`)) and push keys (`VAPID_*`) as in `.env.example`
 
 ## 5. Import your data
 ```bash
