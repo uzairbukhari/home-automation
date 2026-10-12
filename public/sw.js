@@ -82,13 +82,13 @@ async function privateResponse(request, response) {
     id = match[1]; await setAccount(id);
     const assetCache = await caches.open(ASSETS);
     const assets = [...html.matchAll(/(?:src|href)="([^"<>]+\.(?:js|css)(?:\?[^"<>]*)?)"/g)].map(m => new URL(m[1], request.url));
-    await Promise.allSettled(assets.filter(url => url.origin === self.location.origin).map(async url => { const result = await fetch(url); if(result.ok) await assetCache.put(url, result); }));
+    await Promise.allSettled(assets.filter(url => url.origin === self.location.origin).map(async url => { if(await assetCache.match(url)) return; const result = await fetch(url); if(result.ok) await assetCache.put(url, result); }));
   }
   if (id) {
     const cache = await caches.open(`${VERSION}-private-${encodeURIComponent(id)}`);
     await copy(cache, request, response.clone());
-    // Purge expired data even when the expired report is never opened again.
-    for (const old of await cache.keys()) await saved(cache, old);
+    // Purge expired data even when the expired report is never opened again; pages are rare enough to pay for the scan.
+    if (pages.has(new URL(request.url).pathname)) for (const old of await cache.keys()) await saved(cache, old);
   }
   return response;
 }
@@ -122,6 +122,8 @@ self.addEventListener('fetch', event => {
       if (request.mode === 'navigate') return (await (await caches.open(ASSETS)).match('/offline.html')) || Response.error();
       return Response.json({error:'This report has no saved offline copy.'},{status:503});
     }
+    // Serve the page now and save the offline copy in the background.
+    if (response.ok && !response.redirected && response.type !== 'opaqueredirect') { event.waitUntil(privateResponse(request, response.clone()).catch(() => {})); return response; }
     return privateResponse(request,response);
   })());
 });

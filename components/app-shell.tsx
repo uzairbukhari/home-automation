@@ -10,7 +10,10 @@ export function OfflineLink({href,onClick,...props}:ComponentProps<'a'>){
   const target=new URL(href,location.href);
   if(target.origin!==location.origin||target.pathname===location.pathname&&target.search===location.search&&target.hash)return;
   event.preventDefault();
+  const samePage=target.pathname===location.pathname;
   router.push(target.pathname+target.search+target.hash);
+  // Same-page links only change the query string; let URL-backed state re-read it.
+  if(samePage){let frames=0;const settle=()=>{if(location.search===target.search||++frames>30)window.dispatchEvent(new Event('photon-navigation'));else requestAnimationFrame(settle);};requestAnimationFrame(settle);}
  }}/>;
 }
 const Link=OfflineLink;

@@ -13,13 +13,15 @@ test('Notification status resolves without waiting for a service worker to becom
   assert.equal(readyReads,0);assert.equal(registrationReads,1);assert.equal(states[9],true);assert.equal(states[4],Boolean(subscription));
  }
 });
-test('Startup shows an accessible loading shell while private content stays behind the session gate',()=>{
- const React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),{MobileSupport}=require('../components/mobile-support.tsx');
+test('Startup renders the server-verified page immediately instead of a loading shell',()=>{
+ const React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),{MobileSupport,PhotonLoading}=require('../components/mobile-support.tsx');
  const html=renderToStaticMarkup(React.createElement(MobileSupport,{accountId:'alice'},React.createElement('div',null,'Private account readings')));
- assert.match(html,/role="status" aria-busy="true" aria-label="Loading Photon"/);
- assert.match(html,/Preparing your dashboard/);
- assert.match(html,/aria-hidden="true"/);
- assert.doesNotMatch(html,/Private account readings|Opening Photon/);
+ assert.match(html,/Private account readings/);
+ assert.doesNotMatch(html,/Preparing your dashboard/);
+ // The shell remains available for the moment a different account is detected and the page reloads.
+ const shell=renderToStaticMarkup(React.createElement(PhotonLoading));
+ assert.match(shell,/role="status" aria-busy="true" aria-label="Loading Photon"/);
+ assert.match(shell,/Preparing your dashboard/);
 });
 function navigationHarness(initial='https://photon.test/devices') {
  const fs=require('node:fs'),ts=require('typescript'),listeners=new Map(),location={href:initial};
@@ -146,9 +148,11 @@ test('Readable rule summaries preserve inclusive legacy values, actual actions a
  assert.equal(homeCondition({solar:0,home:0,grid:0,charge:0,discharge:0}),'Your home’s latest energy readings');
 });
 test('Report destinations preserve the Appliances address and Billing deep link',()=>{
- const React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),{ReportNavigation}=require('../components/presentation.tsx');
- const html=renderToStaticMarkup(React.createElement(ReportNavigation,{selected:'billing'}));
- assert.match(html,/href="\/reports"/);assert.match(html,/section=reports&amp;report=billing" aria-current="page"/);
+ const Module=require('node:module'),load=Module._load;Module._load=function(name,...args){return name==='next/navigation'?{usePathname:()=>'/reports',useRouter:()=>({push(){}})}:load.call(this,name,...args);};
+ const fresh=()=>{for(const key of Object.keys(require.cache))if(/components[\\/](app-shell|presentation)\.tsx$/.test(key))delete require.cache[key];};fresh();
+ let html;try{const React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),{ReportNavigation}=require('../components/presentation.tsx');
+ html=renderToStaticMarkup(React.createElement(ReportNavigation,{selected:'billing'}));}finally{Module._load=load;fresh();}
+ assert.match(html,/href="\/reports"/);assert.match(html,/aria-current="page" href="\/solar\?section=reports&amp;report=billing"/);
 });
 test('Settings category switches require a decision for unsaved edits',async()=>{
  const h=navigationHarness('https://photon.test/settings?category=battery'),[,category]=h.exports.useUrlState('category','');h.effects.forEach(run=>run());
