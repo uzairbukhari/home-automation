@@ -98,7 +98,7 @@ Activity stores rule snapshots, current/previous observations, evaluation reason
 
 Cache protocol photon-v2-actual-energy invalidates older estimated report copies. Saved pages and API responses are account- and query-scoped; unauthorized responses clear private copies. Offline writes fail without a deferred command queue. Local development bypasses service-worker registration so hot-reload modules cannot mix React versions; production retains offline support.
 
-The combined site.css imports globals followed by photon-ui.css to preserve cascade. The development middleware serves raw CSS for stylesheet requests; production uses built assets. Keep deployment thumbnails unchanged unless explicitly requested.
+The combined site.css imports globals followed by premium.css and polish.css to preserve cascade. The development middleware serves raw CSS for stylesheet requests; production uses built assets. Keep deployment thumbnails unchanged unless explicitly requested.
 
 ## Release and rollback
 
