@@ -1,7 +1,10 @@
 package com.uzairbukhari.photon
 
 import androidx.compose.ui.geometry.Offset
+import com.uzairbukhari.photon.data.AlertFeed
 import com.uzairbukhari.photon.data.AppJson
+import com.uzairbukhari.photon.data.VersionInfo
+import com.uzairbukhari.photon.update.UpdateChecker
 import com.uzairbukhari.photon.data.asBoolean
 import com.uzairbukhari.photon.data.SolarLatest
 import com.uzairbukhari.photon.data.normalizeServerUrl
@@ -158,5 +161,26 @@ class AutomationTest {
         val snap = com.uzairbukhari.photon.data.AppJson.decodeFromString<com.uzairbukhari.photon.data.AutomationSnapshot>(json)
         assertTrue(snap.rules[0].state!!.active)
         assertEquals("r1", snap.runs[0].ruleId)
+    }
+}
+
+class UpdateAndAlertTest {
+    @Test fun onlyHigherVersionCodesCountAsUpdates() {
+        assertTrue(UpdateChecker.isNewer(101, 100))
+        assertFalse(UpdateChecker.isNewer(100, 100))
+        assertFalse(UpdateChecker.isNewer(99, 100))
+    }
+
+    @Test fun versionFileParses() {
+        val info = AppJson.decodeFromString<VersionInfo>("""{"versionCode":120,"versionName":"2.0.120","apk":"/app/photon.apk","extra":1}""")
+        assertEquals(120, info.versionCode)
+        assertEquals("/app/photon.apk", info.apk)
+    }
+
+    @Test fun alertFeedParsesWithMissingFields() {
+        val feed = AppJson.decodeFromString<AlertFeed>("""{"alerts":[{"id":7,"title":"Battery low","body":"Below 20%"}],"latest":7}""")
+        assertEquals(1, feed.alerts.size)
+        assertEquals("", feed.alerts[0].url)
+        assertEquals(7L, feed.latest)
     }
 }

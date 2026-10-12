@@ -33,6 +33,42 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # The Android app is built and published next to the website at /app/photon.apk.
+      # Its signing key is created once and kept in your private D1 database, so every
+      # build is signed with the same key and phones can update in place.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the signed Android app
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          jq -n --arg id "$D1_ID" '{name:"home-dashboard",compatibility_date:"2025-01-01",d1_databases:[{binding:"DB",database_name:"home-dashboard",database_id:$id}]}' > "$RUNNER_TEMP/signing-wrangler.json"
+          d1() { npx wrangler d1 execute DB --remote --json --config "$RUNNER_TEMP/signing-wrangler.json" --command "$1"; }
+          d1 "CREATE TABLE IF NOT EXISTS app_signing (id INTEGER PRIMARY KEY CHECK (id = 1), keystore TEXT NOT NULL, password TEXT NOT NULL)" > /dev/null
+          read_key() { d1 "SELECT keystore, password FROM app_signing WHERE id = 1" | jq -c '.[0].results[0] // empty'; }
+          row="$(read_key)"
+          if [ -z "$row" ]; then
+            pw="$(openssl rand -hex 24)"
+            echo "::add-mask::$pw"
+            keytool -genkeypair -keystore "$RUNNER_TEMP/new.p12" -storetype PKCS12 -alias photon \
+              -keyalg RSA -keysize 2048 -validity 10000 -storepass "$pw" -keypass "$pw" -dname "CN=Photon" 2>/dev/null
+            d1 "INSERT OR IGNORE INTO app_signing (id, keystore, password) VALUES (1, '$(base64 -w0 "$RUNNER_TEMP/new.p12")', '$pw')" > /dev/null
+            row="$(read_key)"
+          fi
+          [ -n "$row" ] || { echo "::error::Could not read or create the app signing key in D1."; exit 1; }
+          echo "$row" | jq -r .keystore | base64 -d > "$RUNNER_TEMP/photon.p12"
+          pw="$(echo "$row" | jq -r .password)"
+          echo "::add-mask::$pw"
+          code=$((100 + RUN_NUMBER))
+          (cd android && PHOTON_KEYSTORE="$RUNNER_TEMP/photon.p12" PHOTON_STORE_PASSWORD="$pw" PHOTON_KEY_ALIAS=photon \
+            ./gradlew --no-daemon :app:assembleRelease -PphotonVersionCode="$code")
+          mkdir -p public/app
+          cp android/app/build/outputs/apk/release/app-release.apk public/app/photon.apk
+          printf '{"versionCode":%s,"versionName":"2.0.%s","apk":"/app/photon.apk"}\n' "$code" "$code" > public/app/version.json
       - run: npm run build
       # The build writes a placeholder database id; point it at the real one and
       # tell wrangler where the migrations live (relative to this config file).

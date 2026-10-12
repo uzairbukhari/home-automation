@@ -5,6 +5,7 @@ import { transition,validateRules,type AlertRule,type AlertState,type AlertObser
 import type { DessSnapshot } from './providers/dessmonitor';
 import type { TuyaDashboardDevice } from './providers/tuya';
 import { decodeTuya } from './tuya-format';
+import { appAlertStatement,ensureAppAlerts } from './app-alerts';
 
 export function notificationDb(){if(!env.DB)throw new Error('Notification storage is unavailable.');return env.DB;}
 export function pushConfig(){const e=env as unknown as Record<string,unknown>;return {subject:String(e.VAPID_SUBJECT??''),publicKey:String(e.VAPID_PUBLIC_KEY??''),privateKey:String(e.VAPID_PRIVATE_KEY??'')};}
@@ -79,6 +80,7 @@ export async function evaluateAlerts(now=new Date()){
   if(!lease)return {status:'already_running',events:0};
   let events=0;
   try {
+    await ensureAppAlerts();
     const {solar,devices}=await observations(now),rows=await db.prepare('SELECT user_id,config FROM notification_rules ORDER BY user_id,id LIMIT 101').all<{user_id:string;config:string}>();
     for(const row of rows.results){
       const rule=JSON.parse(row.config) as AlertRule;if(!rule.enabled)continue;
@@ -90,6 +92,7 @@ export async function evaluateAlerts(now=new Date()){
         const eventId=`${row.user_id}:${rule.id}:${update.state.sequence}:${observation.timestamp}`;
         const payload={...message(rule,observation,update.recovered,devices),accountId:row.user_id,eventId};
         const subscriptions=await db.prepare('SELECT id FROM push_subscriptions WHERE user_id=?').bind(row.user_id).all<{id:string}>();
+        statements.push(appAlertStatement(row.user_id,{eventId,title:payload.title,body:payload.body,url:payload.url},stamp));
         for(const s of subscriptions.results)statements.push(db.prepare('INSERT OR IGNORE INTO notification_deliveries(event_id,subscription_id,user_id,rule_id,payload,next_attempt,created_at) VALUES (?,?,?,?,?,?,?)').bind(eventId,s.id,row.user_id,rule.id,JSON.stringify(payload),stamp,stamp));
         events++;
       }

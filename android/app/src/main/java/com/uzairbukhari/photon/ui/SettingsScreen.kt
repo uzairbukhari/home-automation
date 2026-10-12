@@ -24,6 +24,13 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.uzairbukhari.photon.update.UpdateChecker
+import com.uzairbukhari.photon.work.Scheduler
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -91,7 +98,7 @@ fun SettingsScreen(graph: Graph, model: SettingsViewModel, onMessage: (String) -
                 "notifications" -> AlertsPage(state, model)
                 "appearance" -> AppearancePage(graph)
                 "storage" -> StoragePage(state, model)
-                else -> AccountPage(graph)
+                else -> AccountPage(graph, onMessage)
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -295,7 +302,11 @@ private fun StoragePage(state: SettingsState, model: SettingsViewModel) {
 }
 
 @Composable
-private fun AccountPage(graph: Graph) {
+private fun AccountPage(graph: Graph, onMessage: (String) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val biometric by graph.prefs.biometric.collectAsStateWithLifecycle()
+    var checking by remember { mutableStateOf(false) }
     Column {
         Text("Server", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(graph.session.serverUrl.orEmpty().removePrefix("https://"), color = MaterialTheme.colorScheme.onBackground)
@@ -304,8 +315,27 @@ private fun AccountPage(graph: Graph) {
         Text("App version", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(BuildConfig.VERSION_NAME, color = MaterialTheme.colorScheme.onBackground)
     }
+    SwitchRow("Lock with fingerprint or screen lock", "The app asks for it when you come back after a minute away.", biometric) { on ->
+        if (on && !AppLock.available(context)) onMessage("Set up a screen lock or fingerprint on this phone first.")
+        else graph.prefs.setBiometric(on)
+    }
+    OutlinedButton(
+        enabled = !checking,
+        onClick = {
+            checking = true
+            scope.launch {
+                val info = UpdateChecker(graph.api) { graph.session.serverUrl }.newer()
+                checking = false
+                val url = info?.let { UpdateChecker(graph.api) { graph.session.serverUrl }.apkUrl(it) }
+                if (url == null) onMessage("You have the latest version.")
+                else context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text(if (checking) "Checking…" else "Check for updates") }
     OutlinedButton(
         onClick = {
+            Scheduler.stop(context)
             graph.repository.clearAll()
             graph.session.signOut()
         },

@@ -70,6 +70,8 @@ fun DeviceSheet(
     onFavorite: () -> Unit,
     onRoom: (String) -> Unit,
     onRename: (String) -> Unit,
+    isTile: Boolean,
+    onTile: () -> Unit,
 ) {
     var tab by remember { mutableIntStateOf(0) }
     var renaming by remember { mutableStateOf(false) }
@@ -124,6 +126,11 @@ fun DeviceSheet(
                         Detail("Product", device.productName.ifBlank { device.category })
                         Detail("Last update", device.updatedAt?.let { freshnessLabel(parseInstant(it)).removePrefix("Updated ") } ?: "—")
                         Detail("Device ID", device.id)
+                        if (device.mainSwitch != null) {
+                            OutlinedButton(onClick = onTile, enabled = !isTile) {
+                                Text(if (isTile) "Used by the Quick Settings tile" else "Use for Quick Settings tile")
+                            }
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = { renaming = true }, enabled = !state.offline) { Text("Rename") }
                             Column {
