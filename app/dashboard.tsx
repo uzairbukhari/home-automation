@@ -4,8 +4,8 @@ import { freshness,freshnessLabel } from '@/lib/freshness';
 import {homeCondition} from '@/lib/ui-presentation';
 import {ProviderStatusList} from '@/components/provider-status';
 import {LoadingCards,DeleteMenu} from '@/components/presentation';
-import { lazy,Suspense,useEffect,useRef,useState } from 'react';
-import { TriangleAlert,BatteryCharging,Grid3X3,House,ShieldCheck,SunMedium,Zap } from 'lucide-react';
+import { lazy,Suspense,useEffect,useMemo,useRef,useState } from 'react';
+import { TriangleAlert,ShieldCheck,SunMedium } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -17,7 +17,8 @@ import {AppShell,type AppPage} from '@/components/app-shell';
 import {SettingsScreen} from '@/components/settings-screen';
 import {useUrlState,useUnsavedChanges} from '@/hooks/use-app-navigation';
 import {readJson,foregroundPoll,scheduledPoll,recall,remember} from '@/lib/client-data';
-import {nextPollDelay} from '@/lib/energy-flow';
+import {nextPollDelay,toSnapshot} from '@/lib/energy-flow';
+import {EnergyScene} from '@/components/energy-scene/energy-scene';
 
 import { useFavorites } from '@/hooks/use-favorites';
 import { type ChartId } from '@/lib/favorites';
@@ -26,47 +27,6 @@ import type { TuyaDashboardDevice } from '@/lib/providers/tuya';
 import { useOffline } from '@/components/mobile-support';
 import type { DessSnapshot } from '@/lib/providers/dessmonitor';
 function Metric({label,value,unit,note,color}:{label:string;value:string;unit?:string;note:string;color:string}){return <Card className="metric-card"><div className="metric-top"><span className="metric-label">{label}</span><span className="metric-dot" style={{background:color}}/></div><div className="metric-value">{value}<span>{unit}</span></div><p>{note}</p></Card>}
-function MobileFlowLines({solarActive,homeActive,gridActive,charging,discharging}:{solarActive:boolean;homeActive:boolean;gridActive:boolean;charging:boolean;discharging:boolean}) {
- const ref=useRef<SVGSVGElement>(null);
- const [layout,setLayout]=useState<{width:number;height:number;paths:Record<string,string>}|null>(null);
- useEffect(()=>{
-  const wrap=ref.current?.parentElement;if(!wrap)return;
-  const nodes=['solar','battery','home','grid'].map(name=>wrap.querySelector(`.${name}-node>span`));
-  const core=wrap.querySelector('.flow-core');if(!core||nodes.some(node=>!node))return;
-  const measure=()=>{
-   const box=wrap.getBoundingClientRect(),center=core.getBoundingClientRect();
-   if(!box.width||!box.height)return;
-   const cx=center.left-box.left+center.width/2;
-   const paths:Record<string,string>={};
-   nodes.forEach((node,index)=>{
-    const name=['sun','battery','home','grid'][index],rect=node!.getBoundingClientRect();
-    const left=index===0||index===2,top=index<2;
-    const x=(left?rect.right+3:rect.left-3)-box.left,y=rect.top-box.top+rect.height/2;
-    // Route through the gap between columns, outside the reading labels.
-    const corridor=cx+(left?-8:8),endX=cx+(left?-16:16);
-    const endY=(top?center.top+3:center.bottom-3)-box.top;
-    const bendY=(top?center.top-10:center.bottom+10)-box.top;
-    paths[name]=name==='home'?`M${endX} ${endY} C${corridor} ${bendY} ${corridor} ${y} ${x} ${y}`:`M${x} ${y} C${corridor} ${y} ${corridor} ${bendY} ${endX} ${endY}`;
-   });
-   const next={width:box.width,height:box.height,paths};
-   setLayout(previous=>JSON.stringify(previous)===JSON.stringify(next)?previous:next);
-  };
-  const observer=new ResizeObserver(measure);observer.observe(wrap);observer.observe(core);nodes.forEach(node=>observer.observe(node!));
-  measure();return()=>observer.disconnect();
- },[]);
- const lines=[{name:'sun',active:solarActive,duration:'2.4s',reverse:false},{name:'battery',active:charging||discharging,duration:'1.8s',reverse:charging&&!discharging},{name:'home',active:homeActive,duration:'2s',reverse:false},{name:'grid',active:gridActive,duration:'2s',reverse:false}];
- return <svg ref={ref} className="flow-lines mobile-flow-lines" viewBox={layout?`0 0 ${layout.width} ${layout.height}`:undefined} aria-hidden="true">{layout&&lines.map(line=><g key={line.name}><path className={`flow-path ${line.name} ${line.active?'active':''}`} d={layout.paths[line.name]}/>{line.active&&<circle className={`pulse ${line.name}-pulse`} r="3"><animateMotion key={String(line.reverse)} dur={line.duration} repeatCount="indefinite" path={layout.paths[line.name]} keyPoints={line.reverse?'1;0':'0;1'} keyTimes="0;1" calcMode="linear"/></circle>}</g>)}</svg>
-}
-
-function EnergyFlow({threshold,solar,home,grid,battery,chargeCurrent,dischargeCurrent,mode,isFresh}:{threshold:number;solar:number|null;home:number|null;grid:number|null;battery:number|null;chargeCurrent:number|null;dischargeCurrent:number|null;mode:string|null;isFresh:boolean}){const solarActive=isFresh&&(solar??0)>5,homeActive=isFresh&&(home??0)>5,gridActive=isFresh&&(grid??0)>5,charging=isFresh&&(chargeCurrent??0)>.1,discharging=isFresh&&(dischargeCurrent??0)>.1;return <div className="flow-wrap" data-fresh={isFresh} aria-label={`${isFresh?'Current':'Last recorded'} energy flow: ${discharging?"battery to inverter, ":charging?"inverter to battery, ":""}${home===null?'home readings unavailable':(home??0)>5?"inverter to home":"home idle"}.`}>
-  <MobileFlowLines solarActive={solarActive} homeActive={homeActive} gridActive={gridActive} charging={charging} discharging={discharging}/><svg className="flow-lines desktop-flow-lines" viewBox="0 0 720 280" aria-hidden="true"><path className={`flow-path sun ${solarActive?"active":""}`} d="M145 75 C245 75 250 140 345 140"/><path className={`flow-path battery ${charging||discharging?"active":""}`} d="M145 225 C245 225 255 160 345 160"/><path className={`flow-path home ${homeActive?"active":""}`} d="M375 140 C470 140 470 75 575 75"/><path className={`flow-path grid ${gridActive?"active":""}`} d="M375 160 C475 160 475 225 575 225"/>{solarActive&&<circle className="pulse sun-pulse" r="4"><animateMotion dur="2.4s" repeatCount="indefinite" path="M145 75 C245 75 250 140 345 140"/></circle>}{discharging&&<circle className="pulse battery-pulse" r="4"><animateMotion dur="1.8s" repeatCount="indefinite" path="M145 225 C245 225 255 160 345 160"/></circle>}{charging&&<circle className="pulse battery-pulse" r="4"><animateMotion dur="1.8s" repeatCount="indefinite" path="M345 160 C255 160 245 225 145 225"/></circle>}{homeActive&&<circle className="pulse home-pulse" r="4"><animateMotion dur="2s" repeatCount="indefinite" path="M375 140 C470 140 470 75 575 75"/></circle>}{gridActive&&<circle className="pulse grid-pulse" r="4"><animateMotion dur="2s" repeatCount="indefinite" path="M575 225 C475 225 475 160 375 160"/></circle>}</svg>
-  <Link href="/solar?entity=solar" className="flow-node solar-node"><span><SunMedium/></span><small>Solar</small><strong>{solar===null?"—":(solar/1000).toFixed(2)} <em>kW</em></strong></Link>
-  <Link href="/solar?entity=battery" className="flow-node battery-node"><span><BatteryCharging/></span><small>Battery</small><strong>{battery===null?"—":battery.toFixed(0)} <em>%</em></strong><i className={battery!==null&&battery<threshold?'low':''}>{threshold}% reserve</i></Link>
-  <div className="flow-core"><Zap/><small>Inverter</small><strong>{mode||"—"}</strong></div>
-  <Link href="/solar?entity=home" className="flow-node home-node"><span><House/></span><small>Home load</small><strong>{home===null?"—":(home/1000).toFixed(2)} <em>kW</em></strong></Link>
-  <Link href="/solar?entity=grid" className="flow-node grid-node"><span><Grid3X3/></span><small>Grid import</small><strong>{grid===null?"—":(grid/1000).toFixed(2)} <em>kW</em></strong></Link>
-</div>}
-
 function ConnectionsPanel({embedded=false}:{embedded?:boolean}){ const offline=useOffline();
  const [username,setUsername]=useState(""),[password,setPassword]=useState(""),[companyKey,setCompanyKey]=useState("");
  useUnsavedChanges(Boolean(username||password||companyKey));
@@ -106,13 +66,14 @@ export default function Dashboard({viewerName,page='overview'}:{viewerName:strin
  useEffect(()=>{if(!needsTuya)return;let active=true;let refreshing=false;let opened=false;const refresh=async()=>{if(refreshing)return;refreshing=true;try{if(active)await refreshTuya();if(page==='devices'&&!opened&&navigator.onLine){opened=true;await fetch('/api/devices/refresh',{method:'POST'}).catch(()=>{});if(active)await refreshTuya();}}finally{refreshing=false;}};const stop=foregroundPoll(()=>void refresh(),300000);return()=>{active=false;stop();};},[needsTuya,page]);
  useEffect(()=>{const controller=new AbortController();fetch('/api/settings',{signal:controller.signal}).then(async response=>{const data=await response.json() as Settings & {error?:string};if(!response.ok)throw new Error(data.error||'Settings unavailable');setSettings(remember('settings',data));setSettingsLoaded(true);}).catch(reason=>{if(!controller.signal.aborted)setSettingsError(reason instanceof Error?reason.message:'Settings unavailable');});return()=>controller.abort();},[]);
  const readings=new Map((live?.readings??[]).map(r=>[r.metric,r])),value=(metric:string)=>readings.get(metric)?.value??null,solar=value('solar_power'),home=value('home_power'),grid=value('grid_power'),battery=value('battery_soc'),solarToday=value('solar_today'),fresh=!offline&&Boolean(live&&!liveError&&!freshness(live.updatedAt,300000,clock).stale&&live.readings.some(r=>r.quality==='good'));
+ const snapshot=useMemo(()=>toSnapshot(live?.readings??[],live?.updatedAt??'',fresh,live?.device.mode??null),[live,fresh]);
  const pinnedDevices=tuyaDevices.filter(d=>favorites.has('device',d.id)),pinnedCharts=favorites.favorites.filter(f=>f.kind==='chart').map(f=>f.itemId as ChartId),pin={has:(id:ChartId)=>favorites.has('chart',id),toggle:(id:ChartId)=>favorites.toggle('chart',id),busy:!favorites.loaded||Boolean(favorites.pending)},deviceFavorites={has:(id:string)=>favorites.has('device',id),toggle:(id:string)=>favorites.toggle('device',id),busy:pin.busy};
  const status=offline?'Offline · saved readings':!needsSolar?(page==='devices'?(tuyaError?'Connection issue':tuyaLoading&&!tuyaDevices.length?'Loading your devices…':tuyaDevices.some(d=>d.stale)?'Saved device data · update delayed':'Devices synced'):'Online'):!live?liveError?'Energy unavailable':'Loading energy readings…':liveError||!fresh?`Saved readings · ${freshnessLabel(live.updatedAt).toLowerCase()}`:freshnessLabel(live.updatedAt);
  const attention=[battery!==null&&settingsLoaded&&battery<settings.threshold?`Battery below your ${settings.threshold}% dashboard reserve`:null,!tuyaLoading&&tuyaDevices.some(d=>!d.online)?`${tuyaDevices.filter(d=>!d.online).length} devices unavailable`:null].filter(Boolean);
  return <AppShell page={page} status={<><span className={`status-dot ${fresh?'live':''}`}/>{status}</>}>
  {(liveError||tuyaError)&&!offline&&<div className="connection-alert" role="status"><span>{liveError||tuyaError}</span><Link href="/settings?category=connections">Check connections</Link></div>}
  {(favorites.error||settingsError)&&<div className="device-notice" role="alert">{favorites.error||settingsError}</div>}
- {page==='overview'&&<><div className="home-heading"><div><h2>{homeCondition({solar,home,grid,charge:value('battery_charge_current'),discharge:value('battery_discharge_current')})}</h2><p>{live?`${fresh?'Latest measurement':'Last reading'} · ${new Date(live.updatedAt).toLocaleString('en-PK',{timeZone:'Asia/Karachi',...(fresh?{}:{day:'numeric',month:'short'}),hour:'2-digit',minute:'2-digit'})}`:'Your home’s energy and favorite controls'}</p></div></div>{Boolean(attention.length)&&<div className="home-attention" role="status"><TriangleAlert/><span>{attention.join(' · ')}</span></div>}<section className="overview-grid"><Card className="hero-card"><div className="section-heading"><div><span className="eyebrow">Your energy</span><h2>Energy now</h2></div><span className="updated">{live?'':'Awaiting readings'}</span></div><EnergyFlow threshold={settings.threshold} solar={solar} home={home} grid={grid} battery={battery} chargeCurrent={value('battery_charge_current')} dischargeCurrent={value('battery_discharge_current')} mode={live?.device.mode??null} isFresh={fresh}/><div className="hero-foot"><span className="home-production"><SunMedium/>{fresh?'Today':'Recorded day'} {solarToday===null?'unavailable':solarToday.toFixed(2)+' kWh'}</span></div></Card><div className="metrics-grid"><Metric label="Solar today" value={solarToday===null?'—':solarToday.toFixed(1)} unit=" kWh" note={fresh?'Produced so far today':'Recorded day total'} color="var(--energy-solar)"/><Metric label="Battery stored" value={battery===null?'—':(settings.capacity*battery/100).toFixed(1)} unit=" kWh" note={battery===null?`${settings.threshold}% reserve`:battery>=settings.threshold?`${Math.round(battery-settings.threshold)}% above your ${settings.threshold}% reserve`:`Below your ${settings.threshold}% reserve`} color="var(--energy-battery)"/></div></section>
+ {page==='overview'&&<><div className="home-heading"><div><h2>{homeCondition({solar,home,grid,charge:value('battery_charge_current'),discharge:value('battery_discharge_current')})}</h2><p>{live?`${fresh?'Latest measurement':'Last reading'} · ${new Date(live.updatedAt).toLocaleString('en-PK',{timeZone:'Asia/Karachi',...(fresh?{}:{day:'numeric',month:'short'}),hour:'2-digit',minute:'2-digit'})}`:'Your home’s energy and favorite controls'}</p></div></div>{Boolean(attention.length)&&<div className="home-attention" role="status"><TriangleAlert/><span>{attention.join(' · ')}</span></div>}<section className="overview-grid"><Card className="hero-card"><div className="section-heading"><div><span className="eyebrow">Your energy</span><h2>Energy now</h2></div><span className="updated">{live?'':'Awaiting readings'}</span></div><EnergyScene snapshot={snapshot} capacity={settings.capacity}/><div className="hero-foot"><span className="home-production"><SunMedium/>{fresh?'Today':'Recorded day'} {solarToday===null?'unavailable':solarToday.toFixed(2)+' kWh'}</span></div></Card><div className="metrics-grid"><Metric label="Solar today" value={solarToday===null?'—':solarToday.toFixed(1)} unit=" kWh" note={fresh?'Produced so far today':'Recorded day total'} color="var(--energy-solar)"/><Metric label="Battery stored" value={battery===null?'—':(settings.capacity*battery/100).toFixed(1)} unit=" kWh" note={battery===null?`${settings.threshold}% reserve`:battery>=settings.threshold?`${Math.round(battery-settings.threshold)}% above your ${settings.threshold}% reserve`:`Below your ${settings.threshold}% reserve`} color="var(--energy-battery)"/></div></section>
  {Boolean(pinnedDevices.length)&&<DevicesDashboard compact devices={pinnedDevices} error={tuyaError} loading={tuyaLoading} onRefresh={refreshTuya} favorites={deviceFavorites}/>} {Boolean(pinnedCharts.length)&&<section className="favorite-chart-summaries"><div className="section-heading"><h2>Favorite insights</h2><Link href="/solar">See all</Link></div>{pinnedCharts.map(id=><Link className="insight-row" key={id} href={`/solar?section=${id==='power-history'||id==='soc-history'?'history':'overview'}&chart=${id}`}><span>{({'power-history':'Production & demand','energy-totals':'Solar production & grid use','soc-history':'State of charge','battery-window':'Battery energy window'})[id]}</span><strong>{id==='power-history'?home===null?'—':(home/1000).toFixed(2)+' kW load':id==='energy-totals'?solarToday===null?'—':solarToday.toFixed(2)+' kWh today':battery===null?'—':battery.toFixed(0)+'% charge'}</strong><span aria-hidden="true">›</span></Link>)}</section>}
  {(!favorites.loaded||tuyaLoading&&!tuyaDevices.length)&&<LoadingCards label="Loading favorite controls"/>}{favorites.loaded&&!favorites.error&&!tuyaError&&!tuyaLoading&&!pinnedDevices.length&&!pinnedCharts.length&&<section className="favorites-empty"><h2>Make this dashboard yours</h2><p>Star devices in Devices and charts in Energy to keep your favorites here.</p><div><Link href="/devices">Choose devices</Link><Link href="/solar">Choose charts</Link></div></section>}</>}
  {page==='solar'&&<Suspense fallback={<div className="screen-loading" role="status">Loading Energy…</div>}><SolarDashboard live={live} settings={settings} pin={pin} showReports/></Suspense>}

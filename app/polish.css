@@ -8,7 +8,6 @@
 .login-field .icon-button{position:absolute;right:4px;border:0;background:transparent}
 .login-error{color:var(--destructive);font-size:.875rem}
 .login-card .primary-action{width:100%;min-height:48px;margin-top:4px}.login-card .primary-action:disabled{opacity:.7}
-.flow-node.battery-node i{color:var(--muted-foreground)}.flow-node.battery-node i.low{color:var(--status-warn)}
 .hero-card .updated:empty{display:none}
 .device-offline-pill{display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border:1px solid var(--border);border-radius:999px;background:var(--muted);color:var(--muted-foreground);font-size:.75rem;font-weight:600;white-space:nowrap}
 @media(max-width:767px){.device-toolbar .device-search{grid-column:1/-1;min-height:44px}.device-toolbar>button:first-of-type{width:100%}}

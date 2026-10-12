@@ -105,5 +105,4 @@ body {
 html { scroll-behavior: smooth; background: var(--background); }
 button, input { font: inherit; }
 button { color: inherit; }
-.flow-wrap { width: 100%; }
 
