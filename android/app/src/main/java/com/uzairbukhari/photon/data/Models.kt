@@ -60,3 +60,9 @@ data class LoginResponse(val token: String)
 
 @Serializable
 data class ErrorResponse(val error: String? = null)
+
+/** For request bodies: defaults such as enabled=false must be sent, nulls must not. */
+val RequestJson = Json {
+    encodeDefaults = true
+    explicitNulls = false
+}

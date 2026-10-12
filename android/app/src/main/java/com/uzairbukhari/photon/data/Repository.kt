@@ -26,10 +26,8 @@ class Repository(private val api: ApiClient, private val store: SecureStore) {
 
     suspend fun refreshNow(): String = api.post("/api/refresh")
 
-    fun clearCache(paths: List<String>) = paths.forEach {
-        store.remove(cacheKey(it))
-        store.remove(cacheTimeKey(it))
-    }
+    /** Forgets every saved copy; used when signing out. */
+    fun clearAll() = store.removeWhere { it.startsWith("cache:") || it.startsWith("cache_at:") }
 
     private fun cacheKey(path: String) = "cache:$path"
     private fun cacheTimeKey(path: String) = "cache_at:$path"
