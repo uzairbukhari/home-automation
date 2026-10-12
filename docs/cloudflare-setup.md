@@ -46,3 +46,11 @@ The collector stores everything Tuya and DessMonitor expose so pages never call 
 - Tuya: device data-point logs and the device event log (online/offline, activation) as far back as Tuya retains them (`TUYA_HISTORY_DAYS`, default 30), plus raw device details, homes, rooms and scenes. Local-control keys are never stored.
 - Raw records are kept until the database reaches 4 GB; after that the oldest verified days are summarized and pruned. Daily/monthly/yearly summaries are permanent.
 - Progress and gaps per provider, device and dataset are in the Collection & Storage settings page (`provider_backfill`).
+
+## Android app
+
+Every deploy also builds the native Android app and publishes it at `https://<your worker address>/app/photon.apk` (version info at `/app/version.json`). The app checks that file and shows an "Update ready" banner.
+
+- The signing key is created on the first deploy and stored in a private `app_signing` table in your D1 database, so later builds are signed with the same key and update in place. Do not delete that table; losing it means uninstalling and reinstalling the app.
+- Install: open the APK link on the phone, allow installs from the browser when asked, then sign in with the server address and the owner password.
+- Source lives in `android/`; pull requests run `.github/workflows/android.yml` (tests, lint, debug build).

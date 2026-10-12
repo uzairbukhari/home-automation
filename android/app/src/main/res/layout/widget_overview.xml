@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Photon"
+            android:textColor="#58E1F7"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/w_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#9FB0C8"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout style="@style/WidgetCell">
+            <TextView android:id="@+id/w_soc" style="@style/WidgetValue" android:textColor="#4ADE80" />
+            <TextView style="@style/WidgetLabel" android:text="Battery" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/WidgetCell">
+            <TextView android:id="@+id/w_solar" style="@style/WidgetValue" android:textColor="#F8D35A" />
+            <TextView style="@style/WidgetLabel" android:text="Solar kW" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/WidgetCell">
+            <TextView android:id="@+id/w_home" style="@style/WidgetValue" android:textColor="#58E1F7" />
+            <TextView style="@style/WidgetLabel" android:text="Home kW" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/WidgetCell">
+            <TextView android:id="@+id/w_grid" style="@style/WidgetValue" android:textColor="#C084FC" />
+            <TextView style="@style/WidgetLabel" android:text="Grid kW" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

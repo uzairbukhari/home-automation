@@ -49,6 +49,9 @@ class ApiClient(private val session: Session) {
         session.signIn(base, token)
     }
 
+    /** A request without the token, for public files such as /app/version.json. */
+    suspend fun getPublic(path: String): String = execute(Request.Builder().url(url(path)).get().build(), authenticated = false)
+
     suspend fun get(path: String): String = execute(Request.Builder().url(url(path)).get().build())
 
     suspend fun post(path: String, body: String = "{}"): String = send("POST", path, body)

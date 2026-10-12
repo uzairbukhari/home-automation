@@ -70,7 +70,7 @@ fun visibleDevices(devices: List<Device>, favorites: Set<String>, query: String,
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DevicesScreen(model: DevicesViewModel, onMessage: (String) -> Unit) {
+fun DevicesScreen(model: DevicesViewModel, tileDevice: String?, onTile: (String) -> Unit, onMessage: (String) -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var query by rememberSaveable { mutableStateOf("") }
@@ -174,6 +174,8 @@ fun DevicesScreen(model: DevicesViewModel, onMessage: (String) -> Unit) {
             onFavorite = { model.toggleFavorite(device) },
             onRoom = { model.setRoom(device, it) },
             onRename = { model.rename(device, it) },
+            isTile = tileDevice == device.id,
+            onTile = { onTile(device.id); onMessage("Quick Settings tile now switches " + device.title) },
         )
     }
 }
