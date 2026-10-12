@@ -23,6 +23,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import kotlin.math.roundToInt
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -44,6 +55,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun OverviewScreen(model: OverviewViewModel) {
     val state by model.state.collectAsStateWithLifecycle()
+    var showConnections by rememberSaveable { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     // Reload on open, then shortly after each expected 5-minute collection while the screen is visible.
     LaunchedEffect(lifecycle) {
@@ -60,19 +72,20 @@ fun OverviewScreen(model: OverviewViewModel) {
             Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Header(state, onRefresh = model::refreshFromInverter)
+            Header(state, onRefresh = model::refreshFromInverter, onToggleConnections = { showConnections = !showConnections })
             state.notice?.let { Banner(it, MaterialTheme.colorScheme.primary) }
             when {
                 state.loading -> Row(Modifier.fillMaxWidth().padding(48.dp), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() }
                 state.latest == null -> Banner(state.error ?: "No readings yet.", MaterialTheme.colorScheme.error)
-                else -> Content(state.latest!!, state)
+                else -> Content(state.latest!!, state, showConnections)
             }
         }
     }
 }
 
 @Composable
-private fun Header(state: OverviewState, onRefresh: () -> Unit) {
+private fun Header(state: OverviewState, onRefresh: () -> Unit, onToggleConnections: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
     val observed = parseInstant(state.latest?.updatedAt)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -84,14 +97,15 @@ private fun Header(state: OverviewState, onRefresh: () -> Unit) {
             }
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        IconButton(onClick = onRefresh, enabled = !state.refreshing) {
+        ConnectionChip(state.providers, onToggleConnections)
+        IconButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.ContextClick); onRefresh() }, enabled = !state.refreshing) {
             Icon(Icons.Filled.Refresh, contentDescription = "Collect new readings now", tint = MaterialTheme.colorScheme.primary)
         }
     }
 }
 
 @Composable
-private fun Content(latest: SolarLatest, state: OverviewState) {
+private fun Content(latest: SolarLatest, state: OverviewState, showConnections: Boolean) {
     val observed = parseInstant(latest.updatedAt)
     val fresh = !latest.stale && !isStale(observed) && !state.offline
     if (!fresh) {
@@ -102,19 +116,22 @@ private fun Content(latest: SolarLatest, state: OverviewState) {
     }
     EnergyFlow(energySnapshot(latest, fresh))
 
-    val tiles = listOf(
-        Triple("Solar today", latest.value("solar_today")?.let { "%.1f kWh".format(it) } ?: "—", Hues.Solar),
-        Triple("Battery voltage", latest.value("battery_voltage")?.let { "%.1f V".format(it) } ?: "—", Hues.Battery),
-        Triple("Grid voltage", latest.value("grid_voltage")?.let { "%.0f V".format(it) } ?: "—", Hues.Grid),
-        Triple("Inverter load", latest.value("output_load")?.let { "%.0f %%".format(it) } ?: "—", Hues.Home),
-    )
-    tiles.chunked(2).forEach { row ->
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            row.forEach { (label, value, color) -> Metric(label, value, color, Modifier.weight(1f)) }
-        }
+    val soc = latest.value("battery_soc")
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Metric("Solar today", latest.value("solar_today")?.let { "%.1f".format(it) } ?: "—", "kWh", Hues.Solar, Modifier.weight(1f), big = true)
+        Metric(
+            "Battery stored",
+            soc?.let { "%.1f".format(state.settings.capacity * it / 100) } ?: "—", "kWh", Hues.Charging, Modifier.weight(1f), big = true,
+            note = soc?.let { if (it >= state.settings.threshold) "${(it - state.settings.threshold).roundToInt()}% above your ${state.settings.threshold.roundToInt()}% reserve" else "Below your ${state.settings.threshold.roundToInt()}% reserve" },
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Metric("Battery", latest.value("battery_voltage")?.let { "%.1f".format(it) } ?: "—", "V", Hues.Battery, Modifier.weight(1f))
+        Metric("Grid", latest.value("grid_voltage")?.let { "%.0f".format(it) } ?: "—", "V", Hues.Grid, Modifier.weight(1f))
+        Metric("Inverter load", latest.value("output_load")?.let { "%.0f".format(it) } ?: "—", "%", Hues.Home, Modifier.weight(1f))
     }
 
-    if (state.providers.isNotEmpty()) {
+    if (showConnections && state.providers.isNotEmpty()) {
         Text("Connections", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
         state.providers.forEach { ProviderRow(it) }
     }
@@ -129,12 +146,36 @@ private fun Content(latest: SolarLatest, state: OverviewState) {
 }
 
 @Composable
-private fun Metric(label: String, value: String, accent: Color, modifier: Modifier) {
+private fun Metric(label: String, value: String, unit: String, accent: Color, modifier: Modifier, big: Boolean = false, note: String? = null) {
     Surface(modifier, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(Modifier.padding(16.dp)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = accent)
+        Column(Modifier.padding(if (big) 16.dp else 12.dp)) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = accent, maxLines = 1)
             Spacer(Modifier.height(4.dp))
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    value,
+                    style = if (big) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1,
+                )
+                Spacer(Modifier.width(3.dp))
+                Text(unit, Modifier.padding(bottom = if (big) 3.dp else 2.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (note != null) Text(note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+        }
+    }
+}
+
+/** One glanceable status for both providers; tap to show the detail rows. */
+@Composable
+private fun ConnectionChip(providers: List<ProviderStatus>, onClick: () -> Unit) {
+    if (providers.isEmpty()) return
+    val allGood = providers.all { it.status == "connected" || it.status == "not_configured" }
+    val (text, color) = if (allGood) "Connected" to Hues.Charging else "Needs attention" to Hues.Warning
+    Surface(onClick = onClick, shape = RoundedCornerShape(50), color = color.copy(alpha = 0.14f)) {
+        Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).background(color, CircleShape))
+            Spacer(Modifier.width(6.dp))
+            Text(text, style = MaterialTheme.typography.labelMedium, color = color)
         }
     }
 }
