@@ -95,7 +95,7 @@ async function privateResponse(request, response) {
 self.addEventListener('fetch', event => {
   const request = event.request, url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname === '/signout-with-chatgpt') { event.respondWith((async () => { await setAccount(null); return fetch(request); })()); return; }
+  if (url.pathname === '/api/auth/logout') { event.respondWith((async () => { await setAccount(null); return fetch(request); })()); return; }
   if (request.method !== 'GET') {
     if (url.pathname.startsWith('/api/')) event.respondWith(fetch(request).catch(() => Response.json({error:'Offline: changes are disabled. Nothing was queued.'},{status:503})));
     return;
