@@ -27,3 +27,17 @@ export function foregroundPoll(refresh:()=>void,milliseconds:number) {
  document.addEventListener('visibilitychange',run);
  return()=>{stopped=true;clearInterval(timer);document.removeEventListener('visibilitychange',run);};
 }
+// Polls once now, then again after whatever delay() says once each read finishes. Reads on return to the tab.
+export function scheduledPoll(refresh:()=>Promise<void>|void,delay:()=>number) {
+ let stopped=false,timer:ReturnType<typeof setTimeout>|undefined,running=false;
+ const run=async()=>{
+  clearTimeout(timer);
+  if(stopped||running||document.visibilityState==='hidden')return;
+  running=true;
+  try{await refresh();}finally{running=false;if(!stopped)timer=setTimeout(run,delay());}
+ };
+ void run();
+ const visible=()=>{if(document.visibilityState!=='hidden')void run();};
+ document.addEventListener('visibilitychange',visible);
+ return()=>{stopped=true;clearTimeout(timer);document.removeEventListener('visibilitychange',visible);};
+}
