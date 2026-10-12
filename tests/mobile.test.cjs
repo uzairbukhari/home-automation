@@ -61,7 +61,7 @@ function worker(){
   let network=async()=>new Response('{}',{headers:{'content-type':'application/json'}});
   const context=vm.createContext({URL,Request,Response,Headers,Date,console,caches,fetch:(...args)=>network(...args),self:{location:{origin},addEventListener:(type,fn)=>handlers[type]=fn,clients:{matchAll:async()=>[],claim:async()=>{}},registration:{showNotification:async()=>{},getNotifications:async()=>[]},skipWaiting:async()=>{}}});
   vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../public/sw.js'),'utf8'),context);
-  return {stores,caches,context,setNetwork(fn){network=fn;},async fetch(path,method='GET'){let response;handlers.fetch({request:new Request(origin+path,{method}),respondWith(value){response=value;}});return await response;},async message(data){let task;handlers.message({data,ports:[],waitUntil(value){task=value;}});await task;}};
+  return {stores,caches,context,setNetwork(fn){network=fn;},async fetch(path,method='GET'){let response;const tasks=[];handlers.fetch({request:new Request(origin+path,{method}),respondWith(value){response=value;},waitUntil(task){tasks.push(task);}});const result=await response;await Promise.all(tasks);return result;},async message(data){let task;handlers.message({data,ports:[],waitUntil(value){task=value;}});await task;}};
 }
 test('Offline copies are query/account scoped, expire, and clear on account changes and unauthorized responses',async()=>{
   const w=worker();await w.message({type:'ACCOUNT',accountId:'alice'});

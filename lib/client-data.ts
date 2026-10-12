@@ -1,6 +1,10 @@
 // Share in-flight reads only. Private responses remain owned by the account-aware worker.
 const pending=new Map<string,Promise<unknown>>();
 const commands=new Set<string>();
+// Last values seen in this tab, so a page opens with them while fresh data loads. Never filled on the server.
+const remembered=new Map<string,unknown>();
+export const recall=<T,>(key:string):T|undefined=>typeof window==='undefined'?undefined:remembered.get(key) as T|undefined;
+export const remember=<T,>(key:string,value:T)=>{remembered.set(key,value);return value;};
 export async function sendDeviceCommand(deviceId:string,code:string,value:unknown) {
  if(commands.has(deviceId))throw new Error('A command is already in progress for this device.');
  commands.add(deviceId);
