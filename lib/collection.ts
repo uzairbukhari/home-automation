@@ -59,9 +59,7 @@ export async function maintainCollection(){
     try{await dueWork('solar-reconcile',86400000,async()=>{const today=localDate(),previous=shiftDate(today,-7);if(previous.slice(0,7)!==today.slice(0,7)){const errors=await syncPeriods(new DessMonitorProvider(),today.slice(0,4),previous.slice(0,7));if(errors.length)throw new Error(errors.join('; '));}});
       await dueWork('solar-period-backfill',300000,backfillPeriodUnit);
       await dueWork('history-unit',300000,historyUnit);
-      await dueWork('provider-documents',86400000,documentsUnit);
-      await dueWork('dessmonitor-alarms',3600000,alarmsUnit);
-      await dueWork('tuya-events',300000,tuyaEventsUnit);
+      for(const [id,interval,unit] of [['provider-documents',86400000,documentsUnit],['dessmonitor-alarms',3600000,alarmsUnit],['tuya-events',300000,tuyaEventsUnit]] as const){try{await dueWork(id,interval,unit);}catch{/* Job health and the backfill ledger carry the error; later steps still run. */}}
       await dueWork('retention',300000,async()=>{const bytes=await storageBytes(),retained=await retentionStep(bytes!==null&&bytes>STORAGE_PRUNE_BYTES);const catalog=await database().prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();for(const c of catalog.results)await rebuildLongPeriods(c.source,c.id);return retained;});
       await summarizeOperations();
     }catch(error){throw error;}
