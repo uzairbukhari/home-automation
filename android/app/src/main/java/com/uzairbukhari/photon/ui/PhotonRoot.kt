@@ -72,6 +72,7 @@ fun PhotonRoot(graph: Graph) {
 @Composable
 private fun SignedInApp(graph: Graph) {
     var tab by rememberSaveable { mutableStateOf(Tab.Overview) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -89,7 +90,10 @@ private fun SignedInApp(graph: Graph) {
                 Tab.entries.forEach { entry ->
                     NavigationBarItem(
                         selected = tab == entry,
-                        onClick = { tab = entry },
+                        onClick = {
+                            if (tab != entry) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.ContextClick)
+                            tab = entry
+                        },
                         icon = { Icon(entry.icon, contentDescription = null) },
                         label = { Text(entry.label, maxLines = 1) },
                     )
