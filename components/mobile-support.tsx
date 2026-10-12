@@ -1,4 +1,5 @@
 'use client';
+import { LogoMark } from '@/components/logo-mark';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 const OfflineContext = createContext(false);
@@ -6,7 +7,7 @@ export const useOffline = () => useContext(OfflineContext);
 export function PhotonLoading() {
   return <div className="photon-loading" role="status" aria-busy="true" aria-label="Loading Photon">
     <div className="photon-loading-brand" aria-hidden="true">
-      <span className="photon-loading-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="m13 2-9 12h7l-1 8 10-12h-7z"/></svg></span>
+      <span className="photon-loading-logo brand-mark"><LogoMark/></span>
       <span>Photon</span>
     </div>
     <div className="photon-loading-content" aria-hidden="true">
