@@ -1,29 +1,18 @@
 # Ownership checklist
 
-Everything the app depends on. Tick each item once you can log in to it yourself.
+What the app depends on today, and whether you control it.
 
-| Item | Used for | Where it lives | Do you control it? |
-|---|---|---|---|
-| GitHub repo `uzairbukhari/home-automation` | Source of truth | GitHub | yes |
-| Vercel project | Hosting / deploys | vercel.com | ? check which account owns it |
-| Turso database | All stored history | turso.tech | ? check which account owns it |
-| cron-job.org job | Calls `POST /api/poll` | cron-job.org | ? |
-| DessMonitor account | Inverter data (`DESS_*`) | dessmonitor.com | ? |
-| Tuya IoT Cloud project | Device data/control (`TUYA_*`) | iot.tuya.com | ? |
+| Item | Used for | Controlled by you? |
+|---|---|---|
+| GitHub repo `uzairbukhari/home-automation` | Source code | yes |
+| ChatGPT "Sites" hosting (`photon-energy-home.suzairbukhari.chatgpt.site`, `.openai/hosting.json`) | Runs the app; deploys only happen when ChatGPT publishes | no, this is the dependency to remove |
+| Cloudflare D1 database bound as `DB` (created by Sites) | All stored history | unknown: no direct access confirmed |
+| ChatGPT sign-in (`oai-authenticated-user-*` headers, `app/chatgpt-auth.ts`) | Login | no, only works behind Sites hosting |
+| cron-job.org job | Calls `POST /api/mobile/collect` every 5 min | yes |
+| DessMonitor, Tuya IoT | Inverter / device data | yes |
+| Turso database | Used by the older version of the app | yes |
 
-## Environment variables
-
-See `.env.example` for the full list. Secrets to regenerate at cutover:
-`SESSION_SECRET`, `DASHBOARD_PASSWORD_HASH`, `CRON_SECRET`, and the
-`DESS_*` / `TUYA_*` credentials if the old deployment's owner had them.
-
-## Moving data between Turso databases
-
-```bash
-turso db shell <old-db> .dump > dump.sql
-turso db create <new-db> --from-dump dump.sql
-turso db show <new-db> --url
-turso db tokens create <new-db>
-```
-This needs login access to the old Turso account. If the old database is not
-yours, ask whoever owns it to run the first command.
+The app is a vinext (Next.js on Cloudflare Workers) project, so it can run on
+your own free Cloudflare account. Moving requires: a Worker + D1 on your
+account, a replacement for ChatGPT sign-in, and an export of the existing D1
+data. Variable names are in `.env.example`.
