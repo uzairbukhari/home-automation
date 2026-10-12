@@ -8,7 +8,7 @@ import type {Settings} from '@/lib/settings';
 import type {SolarPoint} from '@/lib/solar-energy';
 import {localDate,shiftDate} from '@/lib/measurements';
 import {freshnessLabel} from '@/lib/freshness';
-const definitions={battery:{title:'Battery',metric:'battery_soc',series:'battery',unit:'%',fields:['battery_soc','battery_voltage','battery_charge_current','battery_discharge_current']},solar:{title:'Solar',metric:'solar_power',series:'solar',unit:'W',fields:['solar_power','solar_today','solar_total']},grid:{title:'Grid',metric:'grid_power',series:'grid',unit:'W',fields:['grid_power']},home:{title:'Home load',metric:'home_power',series:'home',unit:'W',fields:['home_power']}} as const;
+const definitions={battery:{title:'Battery',metric:'battery_soc',series:'battery',unit:'%',fields:['battery_soc','battery_voltage','battery_charge_current','battery_discharge_current']},solar:{title:'Solar',metric:'solar_power',series:'solar',unit:'W',fields:['solar_power','solar_today','solar_total','inverter_temperature']},grid:{title:'Grid',metric:'grid_power',series:'grid',unit:'W',fields:['grid_power']},home:{title:'Home load',metric:'home_power',series:'home',unit:'W',fields:['home_power']}} as const;
 export function EnergyDetail({entity,onClose,live,settings}:{entity:string;onClose:()=>void;live:DessSnapshot|null;settings:Settings}){
  const definition=definitions[entity as keyof typeof definitions]??definitions.solar;
  const [range,setRange]=useUrlState('detailPeriod','1',['1','7','30']),[points,setPoints]=useState<SolarPoint[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(true);

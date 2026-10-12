@@ -1,0 +1,12 @@
+/* Usability polish layered over premium.css. Keep rules small and scoped to the classes named here. */
+.login-page{min-height:100dvh;display:grid;place-items:center;padding:24px 16px;background:var(--background)}
+.login-card{width:100%;max-width:400px;display:grid;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow);padding:28px 24px}
+.login-brand{display:flex;align-items:center;gap:14px;margin-bottom:12px}.login-brand h1{font-size:1.5rem;line-height:1.1}.login-brand p{font-size:.875rem;color:var(--muted-foreground);margin-top:2px}
+.login-card label{font-size:.875rem;font-weight:600}
+.login-field{position:relative;display:flex;align-items:center}.login-field input{width:100%;min-height:48px;padding:0 52px 0 14px;border:1px solid var(--border);border-radius:12px;background:var(--background);color:var(--foreground);font-size:1rem}
+.login-field input[aria-invalid=true]{border-color:var(--destructive)}
+.login-field .icon-button{position:absolute;right:4px;border:0;background:transparent}
+.login-error{color:var(--destructive);font-size:.875rem}
+.login-card .primary-action{width:100%;min-height:48px;margin-top:4px}.login-card .primary-action:disabled{opacity:.7}
+.flow-node.battery-node i{color:var(--muted-foreground)}.flow-node.battery-node i.low{color:var(--status-warn)}
+.hero-card .updated:empty{display:none}
