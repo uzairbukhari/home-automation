@@ -50,6 +50,12 @@ class SecureStore(context: Context) {
     fun getPlain(name: String): String? = prefs.getString(name, null)
     fun remove(name: String) = prefs.edit().remove(name).apply()
 
+    fun removeWhere(match: (String) -> Boolean) {
+        val editor = prefs.edit()
+        prefs.all.keys.filter(match).forEach { editor.remove(it) }
+        editor.apply()
+    }
+
     private fun encode(bytes: ByteArray) = Base64.encodeToString(bytes, Base64.NO_WRAP)
 
     private companion object {

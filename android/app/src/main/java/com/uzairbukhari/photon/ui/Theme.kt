@@ -44,6 +44,11 @@ private val Light = lightColorScheme(
 )
 
 @Composable
-fun PhotonTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) Dark else Light, content = content)
+fun PhotonTheme(mode: String = "system", content: @Composable () -> Unit) {
+    val dark = when (mode) {
+        "dark" -> true
+        "light" -> false
+        else -> isSystemInDarkTheme()
+    }
+    MaterialTheme(colorScheme = if (dark) Dark else Light, content = content)
 }

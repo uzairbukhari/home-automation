@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.uzairbukhari.photon.ui.PhotonRoot
 import com.uzairbukhari.photon.ui.PhotonTheme
 
@@ -13,7 +15,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val graph = (application as PhotonApp).graph
         setContent {
-            PhotonTheme { PhotonRoot(graph) }
+            val theme by graph.prefs.theme.collectAsStateWithLifecycle()
+            PhotonTheme(theme) { PhotonRoot(graph) }
         }
     }
 }

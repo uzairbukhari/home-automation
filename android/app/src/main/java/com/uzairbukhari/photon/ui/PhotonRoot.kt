@@ -2,10 +2,7 @@ package com.uzairbukhari.photon.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Devices
@@ -18,13 +15,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -54,7 +55,10 @@ fun PhotonRoot(graph: Graph) {
 @Composable
 private fun SignedInApp(graph: Graph) {
     var tab by rememberSaveable { mutableStateOf(Tab.Overview) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
@@ -75,19 +79,23 @@ private fun SignedInApp(graph: Graph) {
                     val model: OverviewViewModel = viewModel(factory = OverviewViewModel.factory(graph))
                     OverviewScreen(model)
                 }
-                Tab.Settings -> SettingsScreen(graph)
-                else -> ComingSoon(tab.label)
+                Tab.Energy -> {
+                    val model: EnergyViewModel = viewModel(factory = EnergyViewModel.factory(graph))
+                    EnergyScreen(model)
+                }
+                Tab.Devices -> {
+                    val model: DevicesViewModel = viewModel(factory = DevicesViewModel.factory(graph))
+                    DevicesScreen(model) { message -> scope.launch { snackbar.showSnackbar(message) } }
+                }
+                Tab.Automations -> {
+                    val model: AutomationsViewModel = viewModel(factory = AutomationsViewModel.factory(graph))
+                    AutomationsScreen(model) { message -> scope.launch { snackbar.showSnackbar(message) } }
+                }
+                Tab.Settings -> {
+                    val model: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(graph))
+                    SettingsScreen(graph, model) { message -> scope.launch { snackbar.showSnackbar(message) } }
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun ComingSoon(name: String) {
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Spacer(Modifier.height(160.dp))
-        Text(name, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
-        Spacer(Modifier.height(8.dp))
-        Text("This screen arrives in the next app update.", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

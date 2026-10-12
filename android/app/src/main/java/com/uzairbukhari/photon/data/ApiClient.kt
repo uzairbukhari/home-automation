@@ -51,8 +51,11 @@ class ApiClient(private val session: Session) {
 
     suspend fun get(path: String): String = execute(Request.Builder().url(url(path)).get().build())
 
-    suspend fun post(path: String, body: String = "{}"): String =
-        execute(Request.Builder().url(url(path)).post(body.toRequestBody(JSON)).build())
+    suspend fun post(path: String, body: String = "{}"): String = send("POST", path, body)
+
+    /** POST, PUT, PATCH or DELETE with an optional JSON body. */
+    suspend fun send(method: String, path: String, body: String? = null): String =
+        execute(Request.Builder().url(url(path)).method(method, body?.toRequestBody(JSON)).build())
 
     private suspend fun execute(request: Request, authenticated: Boolean = true): String = withContext(Dispatchers.IO) {
         val signed = if (authenticated) {
