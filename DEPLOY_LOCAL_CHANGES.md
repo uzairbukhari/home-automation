@@ -68,23 +68,11 @@ Do **not** add `.env.local`. It contains your DessMonitor and Tuya credentials a
 
 ## 5. Publish the change
 
-The hosted dashboard uses the Sites deployment connection. A normal `git push` saves source code but does not reliably trigger its hosted release.
-
-After your build and commit succeed, ask Codex in this project chat:
-
-```text
-Deploy my latest local changes to the hosted dashboard.
-```
-
-Codex will publish the committed production build to:
-
-```text
-https://photon-energy-home.suzairbukhari.chatgpt.site
-```
+Push your branch, open a pull request, and merge it into `main` once the CI check is green. Merging deploys automatically to your Cloudflare account (see `docs/cloudflare-setup.md`). You can also run Actions → Deploy → Run workflow by hand. No one else needs to be involved.
 
 ## Before each deployment
 
 - Keep `.env.local` private and out of Git.
 - Run `npm run build` successfully.
 - Check `git status` so unrelated work is not included.
-- Confirm the hosted dashboard behaves correctly after release.
+- Confirm the deployed dashboard behaves correctly after release (Actions → Deploy shows the result).
