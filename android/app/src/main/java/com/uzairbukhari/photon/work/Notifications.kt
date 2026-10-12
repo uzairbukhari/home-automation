@@ -1,6 +1,7 @@
 package com.uzairbukhari.photon.work
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -29,6 +30,7 @@ object Notifications {
     fun canPost(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
+    @SuppressLint("MissingPermission") // canPost() checks POST_NOTIFICATIONS first
     fun show(context: Context, alert: AlertItem) {
         if (!canPost(context)) return
         val open = PendingIntent.getActivity(
