@@ -36,6 +36,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.uzairbukhari.photon.data.ProviderStatus
 import com.uzairbukhari.photon.data.SolarLatest
+import com.uzairbukhari.photon.ui.flow.EnergyFlow
+import com.uzairbukhari.photon.ui.flow.energySnapshot
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,22 +100,7 @@ private fun Content(latest: SolarLatest, state: OverviewState) {
             Hues.Warning,
         )
     }
-    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
-        EnergyFlow(
-            FlowInputs(
-                solarW = latest.value("solar_power"),
-                homeW = latest.value("home_power"),
-                gridW = latest.value("grid_power"),
-                soc = latest.value("battery_soc"),
-                chargeA = latest.value("battery_charge_current"),
-                dischargeA = latest.value("battery_discharge_current"),
-                mode = latest.device.mode,
-                reserve = state.settings.threshold,
-                fresh = fresh,
-            ),
-            Modifier.padding(12.dp),
-        )
-    }
+    EnergyFlow(energySnapshot(latest, fresh))
 
     val tiles = listOf(
         Triple("Solar today", latest.value("solar_today")?.let { "%.1f kWh".format(it) } ?: "—", Hues.Solar),

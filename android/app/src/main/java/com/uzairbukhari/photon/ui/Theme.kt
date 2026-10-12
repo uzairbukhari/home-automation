@@ -14,7 +14,7 @@ object Hues {
     val Solar = Color(0xFFFACC15)
     val Battery = Color(0xFF4ADE80)
     val Charging = Color(0xFF34D399)
-    val Discharging = Color(0xFFFBBF24)
+    val Discharging = Color(0xFFFB923C)
     val Home = Color(0xFF22D3EE)
     val Grid = Color(0xFF60A5FA)
     val Idle = Color(0xFF334155)
