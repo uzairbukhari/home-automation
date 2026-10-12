@@ -1,5 +1,5 @@
 'use client';
-import {ArrowLeft,BatteryCharging,Bell,ChevronRight,KeyRound,Palette,ReceiptText,UserRound} from 'lucide-react';
+import {ArrowLeft,BatteryCharging,Bell,ChevronRight,Database,KeyRound,Palette,ReceiptText,UserRound} from 'lucide-react';
 import {StorageHealth} from './storage-health';
 import {SettingsPanel} from './settings-panel';
 import {NotificationSettings} from './notification-settings';
@@ -9,7 +9,7 @@ import type {ReactNode} from 'react';
 import {workerMessage} from './mobile-support';
 import type {Settings} from '@/lib/settings';
 import type {TuyaDashboardDevice} from '@/lib/providers/tuya';
-const categories=[{id:'storage',title:'Collection & Storage',note:'Data retention, provider usage and scheduler health',icon:ReceiptText},{id:'connections',title:'Connections',note:'Solar inverter and smart devices',icon:KeyRound},{id:'billing',title:'Electricity & Billing',note:'Tariffs, taxes and billing cycles',icon:ReceiptText},{id:'battery',title:'Battery',note:'Capacity and reserve',icon:BatteryCharging},{id:'notifications',title:'Notifications',note:'Delivery on this device and alert rules',icon:Bell},{id:'appearance',title:'Appearance',note:'System, light or dark theme',icon:Palette},{id:'account',title:'Account & App',note:'Your account and offline access',icon:UserRound}];
+const categories=[{id:'storage',title:'Collection & Storage',note:'Data retention, provider usage and scheduler health',icon:Database},{id:'connections',title:'Connections',note:'Solar inverter and smart devices',icon:KeyRound},{id:'billing',title:'Electricity & Billing',note:'Tariffs, taxes and billing cycles',icon:ReceiptText},{id:'battery',title:'Battery',note:'Capacity and reserve',icon:BatteryCharging},{id:'notifications',title:'Notifications',note:'Delivery on this device and alert rules',icon:Bell},{id:'appearance',title:'Appearance',note:'System, light or dark theme',icon:Palette},{id:'account',title:'Account & App',note:'Your account and offline access',icon:UserRound}];
 // Sign-out uses the host-owned authentication route after removing private copies.
 /* eslint-disable @next/next/no-location-assign-relative-destination */
 export function SettingsScreen({settings,onChange,devices,viewerName,onConnections,connections}:{connections:ReactNode;settings:Settings;onChange:(settings:Settings)=>void;devices:TuyaDashboardDevice[];viewerName:string;onConnections:()=>void}) {
