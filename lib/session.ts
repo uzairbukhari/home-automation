@@ -45,6 +45,12 @@ export function readCookie(header: string | null | undefined, name: string): str
   return undefined;
 }
 
+// The native app sends its signed session as "Authorization: Bearer <token>".
+export function bearerToken(header: string | null | undefined): string | undefined {
+  const match = /^Bearer ([^\s]+)$/i.exec((header ?? '').trim());
+  return match?.[1];
+}
+
 export function sessionCookie(token: string, secure: boolean): string {
   return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86_400}${secure ? '; Secure' : ''}`;
 }
