@@ -2,17 +2,40 @@ package com.uzairbukhari.photon.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 
 object Hues {
-    val Solar = Color(0xFFF8D35A)
+    val Solar = Color(0xFFFACC15)
     val Battery = Color(0xFF4ADE80)
-    val Home = Color(0xFF58E1F7)
-    val Grid = Color(0xFFC084FC)
+    val Charging = Color(0xFF34D399)
+    val Discharging = Color(0xFFFBBF24)
+    val Home = Color(0xFF22D3EE)
+    val Grid = Color(0xFF60A5FA)
+    val Idle = Color(0xFF334155)
     val Warning = Color(0xFFF59E0B)
+}
+
+/** Digits keep one width ("tnum") so live values do not jitter as they change. */
+private val Tabular = "tnum"
+
+private val PhotonTypography: Typography = Typography().let { base ->
+    fun TextStyle.numeric(weight: FontWeight? = null) = copy(fontFeatureSettings = Tabular, fontWeight = weight ?: fontWeight)
+    base.copy(
+        headlineSmall = base.headlineSmall.numeric(),
+        titleLarge = base.titleLarge.numeric(FontWeight.SemiBold),
+        titleMedium = base.titleMedium.numeric(),
+        bodyMedium = base.bodyMedium.numeric(),
+        bodySmall = base.bodySmall.numeric(),
+        labelLarge = base.labelLarge.numeric(),
+        labelMedium = base.labelMedium.numeric(),
+        labelSmall = base.labelSmall.numeric(),
+    )
 }
 
 private val Dark = darkColorScheme(
@@ -50,5 +73,5 @@ fun PhotonTheme(mode: String = "system", content: @Composable () -> Unit) {
         "light" -> false
         else -> isSystemInDarkTheme()
     }
-    MaterialTheme(colorScheme = if (dark) Dark else Light, content = content)
+    MaterialTheme(colorScheme = if (dark) Dark else Light, typography = PhotonTypography, content = content)
 }

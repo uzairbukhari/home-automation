@@ -10,11 +10,13 @@ import com.uzairbukhari.photon.data.AppSettings
 import com.uzairbukhari.photon.data.ProviderStatus
 import com.uzairbukhari.photon.data.ProvidersResponse
 import com.uzairbukhari.photon.data.SolarLatest
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
 
@@ -34,33 +36,47 @@ class OverviewViewModel(private val graph: Graph) : ViewModel() {
     private val _state = MutableStateFlow(OverviewState())
     val state: StateFlow<OverviewState> = _state.asStateFlow()
 
-    /** Reads the saved server copy; [pull] shows the pull-to-refresh spinner. */
+    private var loadJob: Job? = null
+
+    /**
+     * Reads the saved server copy; [pull] shows the pull-to-refresh spinner.
+     * Only one load runs at a time (a timer tick never cancels a pull), and every state change is atomic.
+     */
     fun load(pull: Boolean = false) {
-        viewModelScope.launch {
-            if (pull) _state.value = _state.value.copy(refreshing = true)
-            _state.value = try {
+        if (loadJob?.isActive == true) {
+            if (!pull) return
+            loadJob?.cancel()
+        }
+        loadJob = viewModelScope.launch {
+            if (pull) _state.update { it.copy(refreshing = true) }
+            try {
                 val repo = graph.repository
                 coroutineScope {
                     val latest = async { repo.read("/api/solar/latest?summary=1") }
                     val providers = async { runCatching { repo.read("/api/connection-status") }.getOrNull() }
                     val settings = async { runCatching { repo.read("/api/settings") }.getOrNull() }
                     val solar = latest.await()
-                    _state.value.copy(
-                        loading = false,
-                        refreshing = false,
-                        latest = AppJson.decodeFromString<SolarLatest>(solar.body),
-                        providers = providers.await()?.let { AppJson.decodeFromString<ProvidersResponse>(it.body).providers } ?: _state.value.providers,
-                        settings = settings.await()?.let { AppJson.decodeFromString<AppSettings>(it.body) } ?: _state.value.settings,
-                        savedAtMillis = solar.savedAtMillis,
-                        offline = solar.fromCache,
-                        error = null,
-                    )
+                    val decoded = AppJson.decodeFromString<SolarLatest>(solar.body)
+                    val providerList = providers.await()?.let { AppJson.decodeFromString<ProvidersResponse>(it.body).providers }
+                    val appSettings = settings.await()?.let { AppJson.decodeFromString<AppSettings>(it.body) }
+                    _state.update { old ->
+                        old.copy(
+                            loading = false,
+                            refreshing = false,
+                            latest = decoded,
+                            providers = providerList ?: old.providers,
+                            settings = appSettings ?: old.settings,
+                            savedAtMillis = solar.savedAtMillis,
+                            offline = solar.fromCache,
+                            error = null,
+                        )
+                    }
                 }
             } catch (error: ApiException) {
                 // 503 means the server has no readings yet; show its own explanation.
-                _state.value.copy(loading = false, refreshing = false, error = error.message)
+                _state.update { it.copy(loading = false, refreshing = false, error = error.message) }
             } catch (error: IOException) {
-                _state.value.copy(loading = false, refreshing = false, error = "Can't reach the server and nothing is saved on this phone yet.")
+                _state.update { it.copy(loading = false, refreshing = false, error = "Can't reach the server and nothing is saved on this phone yet.") }
             }
         }
     }
@@ -68,7 +84,7 @@ class OverviewViewModel(private val graph: Graph) : ViewModel() {
     /** Asks the server to collect from the inverter now, then reloads. */
     fun refreshFromInverter() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(refreshing = true, notice = null)
+            _state.update { it.copy(refreshing = true, notice = null) }
             val notice = try {
                 graph.repository.refreshNow()
                 "Collected the latest readings."
@@ -77,13 +93,13 @@ class OverviewViewModel(private val graph: Graph) : ViewModel() {
             } catch (error: IOException) {
                 "Can't reach the server."
             }
-            _state.value = _state.value.copy(notice = notice)
+            _state.update { it.copy(notice = notice) }
             load(pull = true)
         }
     }
 
     fun dismissNotice() {
-        _state.value = _state.value.copy(notice = null)
+        _state.update { it.copy(notice = null) }
     }
 
     companion object {

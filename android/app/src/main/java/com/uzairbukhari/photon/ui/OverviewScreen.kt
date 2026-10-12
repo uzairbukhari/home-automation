@@ -43,12 +43,12 @@ import kotlinx.coroutines.delay
 fun OverviewScreen(model: OverviewViewModel) {
     val state by model.state.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    // Reload on open and every minute while the screen is visible.
+    // Reload on open, then shortly after each expected 5-minute collection while the screen is visible.
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 model.load()
-                delay(60_000)
+                delay(nextPollDelayMs(parseInstant(model.state.value.latest?.updatedAt)))
             }
         }
     }
