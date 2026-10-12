@@ -14,3 +14,9 @@
 @media(max-width:767px){.device-toolbar .device-search{grid-column:1/-1;min-height:44px}.device-toolbar>button:first-of-type{width:100%}}
 .chart-summary .series-controls{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center}
 .billing-empty{color:var(--muted-foreground);font-size:.9375rem;line-height:1.5;padding:12px 0}
+
+.rule-switch{display:inline-flex;align-items:center;gap:8px;font-size:.875rem;color:var(--muted-foreground)}
+.activity-status.triggered,.activity-status.accepted{color:var(--status-good)}
+.activity-status.unmatched,.activity-status.waiting{color:var(--muted-foreground)}
+.activity-status.failed{color:var(--destructive)}
+.activity-status.uncertain{color:var(--status-warn)}
