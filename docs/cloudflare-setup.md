@@ -13,7 +13,7 @@ then add the permission **Account → D1 → Edit**. Also copy your **Account ID
 (Workers & Pages overview, right-hand side).
 
 ## 3. Add GitHub settings
-Repository → Settings → Secrets and variables → Actions:
+Repository → Settings → Environments → create an environment named `prod`, and add to it:
 - Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 - Variable: `CLOUDFLARE_D1_DATABASE_ID` (the Database ID from step 1)
 
