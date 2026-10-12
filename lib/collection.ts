@@ -16,7 +16,8 @@ import { repairActualEnergyStep, rebuildLongPeriods, retentionStep, summarizeTuy
 
 async function connection(provider:string,ok:boolean,error?:string){await database().prepare('INSERT INTO connection_state(provider,status,last_success_at,last_error_code,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(provider) DO UPDATE SET status=excluded.status,last_success_at=COALESCE(excluded.last_success_at,connection_state.last_success_at),last_error_code=excluded.last_error_code,updated_at=excluded.updated_at').bind(provider,ok?'connected':'degraded',ok?new Date().toISOString():null,error??null,new Date().toISOString()).run();}
 export async function historyUnit(){
-  const db=database(),turn=Math.floor(Date.now()/300000)%2;
+  // One DessMonitor day every 15 minutes (a day is ~1,500 row writes) keeps the backfill inside the free write allowance; Tuya takes the other two slots.
+  const db=database(),turn=Math.floor(Date.now()/300000)%3;
   if(turn===0){const provider=new DessMonitorProvider(),snapshot=await cachedSnapshot(true,false);if(!snapshot)return{status:'no_solar_metadata'};const entity=snapshot.device.serial,row=await db.prepare('SELECT next_backfill_date FROM solar_sync_state WHERE entity_id=?').bind(entity).first<{next_backfill_date:string|null}>(),date=row?.next_backfill_date??shiftDate(localDate(),-1);let selectedDate=date;for(let days=1;days<=7;days++){const recent=shiftDate(localDate(),-days),covered=await db.prepare("SELECT status FROM history_coverage WHERE source='dessmonitor' AND entity_id=? AND date=?").bind(entity,recent).first();if(!covered){selectedDate=recent;break;}}
     const oldest=(await db.prepare("SELECT MIN(period) date FROM solar_energy_periods WHERE entity_id=? AND period_type='year'").bind(entity).first<{date:string|null}>())?.date??localDate().slice(0,4);if(selectedDate<oldest+'-01-01')return{status:'solar_backfill_complete'};
     const history=await provider.getDay(selectedDate);await saveSamples(entity,history.series);await saveRawFields(entity,history.rawFields);await db.prepare("INSERT INTO history_coverage(source,entity_id,date,status,recorded_at) VALUES ('dessmonitor',?,?,?,?) ON CONFLICT(source,entity_id,date) DO UPDATE SET status=excluded.status,recorded_at=excluded.recorded_at").bind(entity,selectedDate,history.series.length?'available':'missing',new Date().toISOString()).run();
@@ -53,15 +54,15 @@ export async function runCollection(manual=false){
 }
 export async function maintainCollection(){
     await evaluateAlerts();
-    await dueWork('actual-energy-repair',0,repairActualEnergyStep);
+    await dueWork('actual-energy-repair',900000,repairActualEnergyStep);
     // Current counters are shared and refreshed hourly rather than per report or browser.
     try{await dueWork('solar-periods',3600000,async()=>{const errors=await syncPeriods(new DessMonitorProvider(),localDate().slice(0,4));if(errors.length)throw new Error(errors.join('; '));});}catch{/* Durable job health carries the error; live collection still succeeds. */}
     try{await dueWork('solar-reconcile',86400000,async()=>{const today=localDate(),previous=shiftDate(today,-7);if(previous.slice(0,7)!==today.slice(0,7)){const errors=await syncPeriods(new DessMonitorProvider(),today.slice(0,4),previous.slice(0,7));if(errors.length)throw new Error(errors.join('; '));}});
       await dueWork('solar-period-backfill',300000,backfillPeriodUnit);
       await dueWork('history-unit',300000,historyUnit);
       for(const [id,interval,unit] of [['provider-documents',86400000,documentsUnit],['dessmonitor-alarms',3600000,alarmsUnit],['tuya-events',300000,tuyaEventsUnit]] as const){try{await dueWork(id,interval,unit);}catch{/* Job health and the backfill ledger carry the error; later steps still run. */}}
-      await dueWork('retention',300000,async()=>{const bytes=await storageBytes(),retained=await retentionStep(bytes!==null&&bytes>STORAGE_PRUNE_BYTES);const catalog=await database().prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();for(const c of catalog.results)await rebuildLongPeriods(c.source,c.id);return retained;});
-      await summarizeOperations();
+      await dueWork('retention',3600000,async()=>{const bytes=await storageBytes(),retained=await retentionStep(bytes!==null&&bytes>STORAGE_PRUNE_BYTES);const catalog=await database().prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();for(const c of catalog.results)await rebuildLongPeriods(c.source,c.id);return retained;});
+      await dueWork('operations-summary',86400000,summarizeOperations);
     }catch(error){throw error;}
 }
 export async function summarizeOperations(){

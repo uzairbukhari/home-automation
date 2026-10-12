@@ -82,7 +82,7 @@ export async function rebuildLongPeriods(source:string,entity:string){
   for(let i=0;i<statements.length;i+=80)await db.batch(statements.slice(i,i+80));
 }
 // Bounded migration/retention work: only delete the day just verified. Interrupted work resumes.
-// Raw records are kept forever until storage nears the D1 limit; days older than 90 days are still summarized
+// Raw records are kept forever until storage nears the database size limit; days older than 90 days are still summarized
 // (one ledger cursor per entity) because long-range reports read the permanent daily summaries.
 async function summaryStep(cutoff:string){
   const db=database(),entities=await db.prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();

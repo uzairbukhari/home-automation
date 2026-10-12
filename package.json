@@ -13,7 +13,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "hash-password": "node scripts/hash-password.mjs",
-    "test": "node --test --test-isolation=none tests/dashboard.test.cjs tests/mobile.test.cjs tests/mobile-redesign.test.cjs tests/database-first.test.cjs tests/mobile-app.test.cjs tests/energy-flow.test.cjs"
+    "test": "node --test --test-isolation=none tests/dashboard.test.cjs tests/mobile.test.cjs tests/mobile-redesign.test.cjs tests/database-first.test.cjs tests/mobile-app.test.cjs tests/energy-flow.test.cjs tests/turso.test.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

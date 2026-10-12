@@ -1,7 +1,7 @@
 import { database } from './jobs';
 
 export type LedgerRow={provider:string;entity_id:string;dataset:string;oldest_covered:string|null;covered_through:string|null;cursor:string|null;status:string;rows_total:number;error:string|null;updated_at:string};
-// D1 free plan allows 5 GB; above this the oldest verified raw days are pruned instead of kept.
+// The Turso free plan allows 5 GB; above this the oldest verified raw days are pruned instead of kept.
 export const STORAGE_PRUNE_BYTES=4*1024**3;
 export async function ledgerRow(provider:string,entity:string,dataset:string){return database().prepare('SELECT * FROM provider_backfill WHERE provider=? AND entity_id=? AND dataset=?').bind(provider,entity,dataset).first<LedgerRow>();}
 export async function saveLedger(provider:string,entity:string,dataset:string,patch:Partial<Pick<LedgerRow,'oldest_covered'|'covered_through'|'cursor'|'status'|'error'>>&{addRows?:number}){
