@@ -6,7 +6,7 @@ import { ledgerRow, saveDocument, saveLedger } from './backfill-ledger';
 
 const DAY=86400000;
 // Tuya only serves history it still retains; older windows simply come back empty and are recorded as covered.
-export function lookbackDays(){const value=Number((env as unknown as Record<string,string|undefined>).TUYA_HISTORY_DAYS);return Number.isFinite(value)&&value>0?Math.min(value,1095):365;}
+export function lookbackDays(){const value=Number((env as unknown as Record<string,string|undefined>).TUYA_HISTORY_DAYS);return Number.isFinite(value)&&value>0?Math.min(value,1095):30;}
 
 // Daily snapshot of everything the providers describe about the account and devices.
 export async function documentsUnit(){
