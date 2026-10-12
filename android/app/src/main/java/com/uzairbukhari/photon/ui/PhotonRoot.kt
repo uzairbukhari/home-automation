@@ -18,6 +18,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -54,7 +59,10 @@ fun PhotonRoot(graph: Graph) {
 @Composable
 private fun SignedInApp(graph: Graph) {
     var tab by rememberSaveable { mutableStateOf(Tab.Overview) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
@@ -74,6 +82,10 @@ private fun SignedInApp(graph: Graph) {
                 Tab.Overview -> {
                     val model: OverviewViewModel = viewModel(factory = OverviewViewModel.factory(graph))
                     OverviewScreen(model)
+                }
+                Tab.Devices -> {
+                    val model: DevicesViewModel = viewModel(factory = DevicesViewModel.factory(graph))
+                    DevicesScreen(model) { message -> scope.launch { snackbar.showSnackbar(message) } }
                 }
                 Tab.Settings -> SettingsScreen(graph)
                 else -> ComingSoon(tab.label)
