@@ -206,7 +206,7 @@ fun EnergyFlow(snapshot: EnergySnapshot, modifier: Modifier = Modifier) {
                 else -> "Discharging −${kw1(battery)} kW"
             }
             val cardW = 124.dp
-            val cardH = 68.dp
+            val cardH = 82.dp
             fun place(node: FlowNode, dx: Float, dy: Float): IntOffset {
                 val a = iso.p(Anchors.getValue(node))
                 val w = with(density) { cardW.toPx() }
@@ -264,7 +264,7 @@ private fun Callout(
         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.82f),
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) accent else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
     ) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.Center) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 4.dp), verticalArrangement = Arrangement.Center) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(node.label, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = accent, maxLines = 1)
                 Text("›", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)

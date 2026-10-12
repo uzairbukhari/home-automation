@@ -166,3 +166,18 @@ test('Back restores Energy subsections while overlay filters keep their choices'
  section('history',true);section('reports',true);h.history.back();assert.equal(new URL(h.location.href).searchParams.get('section'),'history');
  h.history.back();assert.equal(new URL(h.location.href).searchParams.has('section'),false);
 });
+
+test('Reports use the inverter monthly counter and queue a period sync while provider totals are missing',async()=>{
+ const {database,auth,afterTasks}=require('./helpers.cjs'),{sqlite}=database(),oldUser=auth.user;
+ const {saveSnapshot}=require('../lib/solar-store.ts');
+ const stamp=new Date().toISOString();
+ auth.user={userId:'fresh-database-fixture'};afterTasks.length=0;
+ try{
+  await saveSnapshot({device:{serial:'fresh-database-fixture',name:'Fixture',collector:'test',mode:'Line mode'},updatedAt:stamp,readings:[{metric:'solar_today',value:12.3,quality:'good'},{metric:'solar_month',value:142.6,quality:'good'},{metric:'solar_total',value:1731,quality:'good'}],series:[{sourceTimestamp:stamp,solar:100,home:50,grid:0,battery:50}]});
+  const response=await require('../app/api/solar/reports/route.ts').GET(new Request('http://localhost/api/solar/reports'));assert.equal(response.status,200);
+  const report=await response.json();
+  assert.equal(report.production.month,142.6);assert.equal(report.production.lifetime,1731);
+  assert.equal(afterTasks.length,1,'one period sync is queued');
+  assert.deepEqual(report.diagnostics.periodJobs,[]);
+ }finally{auth.user=oldUser;afterTasks.length=0;sqlite.close();}
+});
