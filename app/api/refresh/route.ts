@@ -1,0 +1,5 @@
+import { getOwnerUser, sameOrigin } from '@/lib/owner-auth';
+import { runCollection } from '@/lib/collection';
+import { claimJob, database, finishJob } from '@/lib/jobs';
+export async function GET(){if(!await getOwnerUser())return Response.json({error:'Unauthorized'},{status:401});return Response.json((await database().prepare('SELECT id,next_due,last_success,error,lease_until FROM app_jobs WHERE id IN (\'collection\',\'manual-refresh\')').all()).results,{headers:{'cache-control':'private, no-store'}});}
+export async function POST(request:Request){if(!await getOwnerUser())return Response.json({error:'Unauthorized'},{status:401});if(!sameOrigin(request))return Response.json({error:'Invalid request origin'},{status:403});const job=await claimJob('manual-refresh',60000);if(!job)return Response.json({error:'A shared refresh is running or was requested in the last minute.'},{status:429});try{const result=await runCollection(true);await finishJob(job);return Response.json(result,{status:result.status==='failed'?502:200});}catch(error){await finishJob(job,String(error));return Response.json({error:String(error)},{status:502});}}

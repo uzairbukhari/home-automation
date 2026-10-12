@@ -1,0 +1,5 @@
+<resources>
+  <string name="app_name">Photon</string>
+  <color name="background">#09111f</color>
+  <string name="asset_statements">[{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://photon-energy-home.suzairbukhari.chatgpt.site\"}}]</string>
+</resources>

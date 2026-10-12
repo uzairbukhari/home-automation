@@ -1,178 +1,269 @@
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
-// --- Inverter (DessMonitor) ---
-
-export const inverterReadings = sqliteTable(
-  "inverter_readings",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    ts: integer("ts", { mode: "timestamp" }).notNull(), // reading timestamp (UTC)
-    pvW: real("pv_w").notNull(), // solar production, watts
-    loadW: real("load_w").notNull(), // household load, watts
-    batteryW: real("battery_w").notNull(), // +charging / -discharging
-    batterySoc: real("battery_soc").notNull(), // %
-    batteryV: real("battery_v"),
-    batteryA: real("battery_a"),
-    gridW: real("grid_w"), // +import / -export
-    gridV: real("grid_v"),
-    inverterTempC: real("inverter_temp_c"),
-    mode: text("mode"), // e.g. "line", "battery", "solar"
-    // Extra fields captured from DessMonitor but not used in core rollups yet.
-    pvV: real("pv_v"),
-    pvA: real("pv_a"),
-    gridHz: real("grid_hz"),
-    outputV: real("output_v"),
-    outputHz: real("output_hz"),
-    loadPct: real("load_pct"),
-    raw: text("raw", { mode: "json" }), // full normalized snapshot for debugging
-    rawPoints: text("raw_points", { mode: "json" }), // raw {title,val,unit}[] from the API, for future re-mapping
-    source: text("source").notNull().default("poll"), // "poll" | "backfill"
-  },
-  (t) => [uniqueIndex("inverter_readings_ts_idx").on(t.ts)]
-);
-
-export const energyDaily = sqliteTable(
-  "energy_daily",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    date: text("date").notNull().unique(), // YYYY-MM-DD (local day)
-    pvKwh: real("pv_kwh").notNull().default(0),
-    loadKwh: real("load_kwh").notNull().default(0),
-    gridImportKwh: real("grid_import_kwh").notNull().default(0),
-    gridExportKwh: real("grid_export_kwh").notNull().default(0),
-    battChargeKwh: real("batt_charge_kwh").notNull().default(0),
-    battDischargeKwh: real("batt_discharge_kwh").notNull().default(0),
-  }
-);
-
-export const energyHourly = sqliteTable(
-  "energy_hourly",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    date: text("date").notNull(), // YYYY-MM-DD (local day, matches todayKey())
-    hourOfDay: integer("hour_of_day").notNull(), // 0-23, local hour
-    pvWh: real("pv_wh").notNull().default(0),
-    loadWh: real("load_wh").notNull().default(0),
-    sampleCount: integer("sample_count").notNull().default(0),
-  },
-  (t) => [uniqueIndex("energy_hourly_date_hour_idx").on(t.date, t.hourOfDay)]
-);
-
-export const batteryHealthDaily = sqliteTable("battery_health_daily", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  date: text("date").notNull().unique(), // YYYY-MM-DD (local day)
-  minSocPct: real("min_soc_pct"),
-  maxSocPct: real("max_soc_pct"),
-  chargeKwh: real("charge_kwh").notNull().default(0),
-  dischargeKwh: real("discharge_kwh").notNull().default(0),
+export const userSettings = sqliteTable("user_settings", {
+  userId: text("user_id").primaryKey(), unitRate: real("unit_rate").notNull().default(13.01), referenceRate: real("reference_rate").notNull().default(10.54),
+  fixedCharges: real("fixed_charges").notNull().default(300), adjustments: real("adjustments").notNull().default(0), billingDay: integer("billing_day").notNull().default(1),
+  capacity: real("battery_capacity").notNull().default(5.2), threshold: integer("battery_threshold").notNull().default(39), timeOfUse: integer("time_of_use", { mode: "boolean" }).notNull().default(false),
+  peakRate: real("peak_rate").notNull().default(46.85), offPeakRate: real("off_peak_rate").notNull().default(34.53), peakStart: text("peak_start").notNull().default("17:00"), peakEnd: text("peak_end").notNull().default("22:00"),
+  tariffSettings: text('tariff_settings').notNull().default('{}'),
+  effectiveAt: text("effective_at").notNull().default(sql`CURRENT_TIMESTAMP`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-// --- Tuya devices ---
+export const observations = sqliteTable("observations", {
+  id: integer("id").primaryKey({ autoIncrement: true }), source: text("source").notNull(), entityId: text("entity_id").notNull(), metric: text("metric").notNull(),
+  value: real("value"), unit: text("unit").notNull(), quality: text("quality").notNull().default("good"), sourceTimestamp: text("source_timestamp").notNull(), recordedAt: text("recorded_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [uniqueIndex("idx_observations_dedupe").on(table.source,table.entityId,table.metric,table.sourceTimestamp),index("idx_observations_metric_time").on(table.metric,table.sourceTimestamp)]);
 
-export const tuyaDevices = sqliteTable("tuya_devices", {
-  id: text("id").primaryKey(), // Tuya device id
-  name: text("name").notNull(),
-  category: text("category").notNull(), // Tuya category code, e.g. "cz", "kg", "dj"
-  online: integer("online", { mode: "boolean" }).notNull().default(false),
-  room: text("room"),
-  icon: text("icon"),
-  lastStatus: text("last_status", { mode: "json" }), // array of {code, value}
-  updatedAt: integer("updated_at", { mode: "timestamp" }),
+export const deviceCatalog = sqliteTable("device_catalog", {
+  id:text("id").primaryKey(), source:text("source").notNull(), name:text("name").notNull(), category:text("category").notNull(), room:text("room"),
+  online:integer("online",{mode:"boolean"}).notNull().default(false), capabilities:text("capabilities").notNull().default("[]"), updatedAt:text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-export const tuyaReadings = sqliteTable(
-  "tuya_readings",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    ts: integer("ts", { mode: "timestamp" }).notNull(),
-    deviceId: text("device_id")
-      .notNull()
-      .references(() => tuyaDevices.id),
-    powerW: real("power_w"),
-    energyKwh: real("energy_kwh"),
-    voltageV: real("voltage_v"),
-    currentA: real("current_a"),
-    addEleKwh: real("add_ele_kwh"), // Tuya's own cumulative energy counter, when the device reports one
-    extra: text("extra", { mode: "json" }),
-  },
-  (t) => [index("tuya_readings_device_ts_idx").on(t.deviceId, t.ts)]
-);
+export const tuyaDeviceState = sqliteTable("tuya_device_state", {
+  deviceId:text("device_id").notNull(), code:text("code").notNull(), valueJson:text("value_json").notNull(), valueType:text("value_type").notNull(),
+  numericValue:real("numeric_value"), unit:text("unit").notNull().default(""), sourceTimestamp:text("source_timestamp").notNull(), recordedAt:text("recorded_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [primaryKey({ columns:[table.deviceId,table.code,table.sourceTimestamp] }),index("idx_tuya_state_device_time").on(table.deviceId,table.sourceTimestamp)]);
 
-// One row per DP value change (switch toggles, brightness, online state, ...).
-// Powers on-time / activity-timeline insights without scanning every raw poll.
-export const tuyaEvents = sqliteTable(
-  "tuya_events",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    ts: integer("ts", { mode: "timestamp" }).notNull(),
-    deviceId: text("device_id")
-      .notNull()
-      .references(() => tuyaDevices.id),
-    code: text("code").notNull(),
-    value: text("value", { mode: "json" }).notNull(),
-  },
-  (t) => [index("tuya_events_device_ts_idx").on(t.deviceId, t.ts)]
-);
-
-// Per-device daily energy (kWh), from live add_ele deltas and/or backfilled
-// from Tuya's statistics API. Unique per device+date so backfill can upsert.
-export const tuyaEnergyDaily = sqliteTable(
-  "tuya_energy_daily",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    deviceId: text("device_id")
-      .notNull()
-      .references(() => tuyaDevices.id),
-    date: text("date").notNull(),
-    kwh: real("kwh").notNull().default(0),
-  },
-  (t) => [uniqueIndex("tuya_energy_daily_device_date_idx").on(t.deviceId, t.date)]
-);
-
-// --- Ingestion observability ---
-
-export const ingestRuns = sqliteTable(
-  "ingest_runs",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    source: text("source").notNull(), // "dess" | "tuya" | "dess_backfill" | "tuya_backfill"
-    startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
-    durationMs: integer("duration_ms").notNull().default(0),
-    ok: integer("ok", { mode: "boolean" }).notNull(),
-    error: text("error"),
-    rows: integer("rows").notNull().default(0),
-  },
-  (t) => [index("ingest_runs_source_started_idx").on(t.source, t.startedAt)]
-);
-
-export const backfillState = sqliteTable("backfill_state", {
-  source: text("source").primaryKey(), // "dess" | "tuya"
-  cursorDate: text("cursor_date"), // YYYY-MM-DD, walks backward from yesterday
-  doneAt: integer("done_at", { mode: "timestamp" }), // set once the target window is fully backfilled
-  lastError: text("last_error"),
+export const tuyaDevicePreferences = sqliteTable("tuya_device_preferences", {
+  deviceId:text("device_id").primaryKey(), roomOverride:text("room_override"), updatedAt:text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-// --- Settings (single row, id = 1) ---
+export const tuyaCommandLog = sqliteTable("tuya_command_log", {
+  id:integer("id").primaryKey({autoIncrement:true}), deviceId:text("device_id").notNull(), code:text("code").notNull(), requestedValue:text("requested_value").notNull(),
+  status:text("status").notNull(), error:text("error"), requestedAt:text("requested_at").notNull().default(sql`CURRENT_TIMESTAMP`), confirmedAt:text("confirmed_at"),
+}, table => [index("idx_tuya_commands_device_time").on(table.deviceId,table.requestedAt)]);
 
-export const settings = sqliteTable("settings", {
-  id: integer("id").primaryKey().default(1),
-  currency: text("currency").notNull().default("PKR"),
-  flatRatePerKwh: real("flat_rate_per_kwh"), // simple tariff
-  peakRatePerKwh: real("peak_rate_per_kwh"), // optional time-of-use
-  offPeakRatePerKwh: real("off_peak_rate_per_kwh"),
-  peakStartHour: integer("peak_start_hour"), // 0-23
-  peakEndHour: integer("peak_end_hour"),
-  systemCostPkr: real("system_cost_pkr"), // total install cost, for ROI
-  panelKwp: real("panel_kwp").notNull().default(3.5),
-  batteryKwh: real("battery_kwh").notNull().default(5.2),
-  gridCo2KgPerKwh: real("grid_co2_kg_per_kwh").notNull().default(0.45),
+export const tuyaCollectionRuns = sqliteTable("tuya_collection_runs", {
+  id:integer("id").primaryKey({autoIncrement:true}), startedAt:text("started_at").notNull(), finishedAt:text("finished_at"), status:text("status").notNull(),
+  deviceCount:integer("device_count").notNull().default(0), readingCount:integer("reading_count").notNull().default(0), error:text("error"),
 });
 
-// --- Cached provider tokens ---
-
-export const authTokens = sqliteTable("auth_tokens", {
-  provider: text("provider").primaryKey(), // "dess" | "tuya"
-  token: text("token").notNull(),
-  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-  extra: text("extra", { mode: "json" }), // e.g. dess session id / endpoint
+export const connectionState = sqliteTable("connection_state", {
+  provider:text("provider").primaryKey(), status:text("status").notNull().default("not_configured"), lastSuccessAt:text("last_success_at"), lastErrorCode:text("last_error_code"), updatedAt:text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const providerCredentials = sqliteTable("provider_credentials", {
+  userId: text("user_id").notNull(),
+  provider: text("provider").notNull(),
+  ciphertext: text("ciphertext").notNull(),
+  iv: text("iv").notNull(),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [primaryKey({ columns:[table.userId,table.provider] })]);
+
+export const dashboardFavorites = sqliteTable('dashboard_favorites', {
+  userId: text('user_id').notNull(), kind: text('kind').notNull(), itemId: text('item_id').notNull(),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [primaryKey({ columns: [table.userId,table.kind,table.itemId] })]);
+
+export const solarSamples = sqliteTable('solar_samples', {
+  entityId: text('entity_id').notNull(), sourceTimestamp: text('source_timestamp').notNull(), data: text('data').notNull(),
+  recordedAt: text('recorded_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [primaryKey({ columns: [table.entityId,table.sourceTimestamp] }),index('idx_solar_samples_time').on(table.sourceTimestamp)]);
+
+export const solarEnergyPeriods = sqliteTable('solar_energy_periods', {
+  entityId: text('entity_id').notNull(), periodType: text('period_type').notNull(), period: text('period').notNull(),
+  solar: real('solar_kwh'), grid: real('grid_kwh'), home: real('home_kwh'), source: text('solar_source').notNull(), gridSource: text('grid_source').notNull(),
+  coveredHours: real('covered_hours').notNull().default(0), partial: integer('partial',{mode:'boolean'}).notNull().default(true),
+  report: text('report_json'), updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, table => [primaryKey({ columns: [table.entityId,table.periodType,table.period] })]);
+
+export const solarCollectionRuns = sqliteTable('solar_collection_runs', {
+  id: integer('id').primaryKey({autoIncrement:true}), startedAt: text('started_at').notNull(), finishedAt: text('finished_at'),
+  status: text('status').notNull(), samples: integer('samples').notNull().default(0), error: text('error'),
+});
+export const solarSyncState = sqliteTable('solar_sync_state', {
+  entityId: text('entity_id').primaryKey(), nextBackfillDate: text('next_backfill_date'), oldestDate: text('oldest_date'),
+  recoveredThrough: text('recovered_through'), leaseUntil: text('lease_until'), leaseToken: text('lease_token'),
+});
+export const tuyaRooms = sqliteTable('tuya_rooms', {
+  name: text('name').primaryKey(), createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+export const electricityTariffs = sqliteTable('electricity_tariffs', {
+  id: text('id').primaryKey(), effectiveAt: text('effective_at').notNull(), source: text('source').notNull(), notification: text('notification').notNull(),
+  rates: text('rates_json').notNull(), taxSources: text('tax_sources_json').notNull(), recordedAt: text('recorded_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const notificationRules=sqliteTable('notification_rules',{
+  userId:text('user_id').notNull(),id:text('id').notNull(),config:text('config').notNull(),
+},table=>[primaryKey({columns:[table.userId,table.id]})]);
+export const pushSubscriptions=sqliteTable('push_subscriptions',{
+  id:text('id').primaryKey(),userId:text('user_id').notNull(),subscription:text('subscription').notNull(),createdAt:text('created_at').notNull(),
+},table=>[index('idx_push_user').on(table.userId)]);
+export const notificationState=sqliteTable('notification_state',{
+  userId:text('user_id').notNull(),ruleId:text('rule_id').notNull(),state:text('state').notNull(),
+},table=>[primaryKey({columns:[table.userId,table.ruleId]})]);
+export const notificationDeliveries=sqliteTable('notification_deliveries',{
+  eventId:text('event_id').notNull(),subscriptionId:text('subscription_id').notNull(),userId:text('user_id').notNull(),ruleId:text('rule_id').notNull(),payload:text('payload').notNull(),
+  attempts:integer('attempts').notNull().default(0),nextAttempt:text('next_attempt').notNull(),createdAt:text('created_at').notNull(),status:text('status').notNull().default('pending'),error:text('error'),
+},table=>[primaryKey({columns:[table.eventId,table.subscriptionId]}),index('idx_notifications_pending').on(table.status,table.nextAttempt)]);
+export const notificationHealth=sqliteTable('notification_health',{
+  id:text('id').primaryKey(),leaseUntil:text('lease_until'),leaseToken:text('lease_token'),evaluatedAt:text('evaluated_at'),deliveredAt:text('delivered_at'),error:text('error'),
+});
+
+// Database-first telemetry, durable collection, commands and automation.
+export const appJobs = sqliteTable('app_jobs', {
+  id: text('id').primaryKey().notNull(),
+  lease_token: text('lease_token'),
+  lease_until: text('lease_until'),
+  next_due: text('next_due'),
+  last_success: text('last_success'),
+  error: text('error'),
+  updated_at: text('updated_at').notNull(),
+});
+export const providerRequests = sqliteTable('provider_requests', {
+  id: integer('id').primaryKey({autoIncrement:true}),
+  provider: text('provider').notNull(),
+  purpose: text('purpose').notNull(),
+  timestamp: text('timestamp').notNull(),
+  status: integer('status'),
+  error: text('error'),
+}, t => [index('idx_provider_requests_time').on(t.timestamp)]);
+export const tuyaLatest = sqliteTable('tuya_latest', {
+  device_id: text('device_id').notNull(),
+  code: text('code').notNull(),
+  value_json: text('value_json').notNull(),
+  numeric_value: real('numeric_value'),
+  unit: text('unit').notNull().default(''),
+  source_timestamp: text('source_timestamp').notNull(),
+  collected_at: text('collected_at').notNull(),
+  quality: text('quality').notNull(),
+}, t => [primaryKey({columns:[t.device_id,t.code]})]);
+export const deviceDetails = sqliteTable('device_details', {
+  device_id: text('device_id').primaryKey().notNull(),
+  snapshot: text('snapshot').notNull(),
+  collected_at: text('collected_at').notNull(),
+  metadata_at: text('metadata_at'),
+  alias: text('alias'),
+  channel_labels: text('channel_labels').notNull().default('{}'),
+  upstream: integer('upstream').notNull().default(0),
+});
+export const deviceRoomHistory = sqliteTable('device_room_history', {
+  device_id: text('device_id').notNull(),
+  effective_at: text('effective_at').notNull(),
+  room: text('room').notNull(),
+}, t => [primaryKey({columns:[t.device_id,t.effective_at]})]);
+export const tuyaSync = sqliteTable('tuya_sync', {
+  device_id: text('device_id').primaryKey().notNull(),
+  from_ms: integer('from_ms'),
+  to_ms: integer('to_ms'),
+  cursor: text('cursor'),
+  covered_through: text('covered_through'),
+  error: text('error'),
+});
+export const telemetrySummaries = sqliteTable('telemetry_summaries', {
+  source: text('source').notNull(),
+  entity_id: text('entity_id').notNull(),
+  granularity: text('granularity').notNull(),
+  period: text('period').notNull(),
+  room: text('room').notNull().default(''),
+  data: text('data').notNull(),
+  calculation_version: integer('calculation_version').notNull().default(1),
+  updated_at: text('updated_at').notNull(),
+}, t => [primaryKey({columns:[t.source,t.entity_id,t.granularity,t.period,t.room]}),index('idx_summaries_period').on(t.source,t.granularity,t.period)]);
+export const operationalDaily = sqliteTable('operational_daily', {
+  date: text('date').notNull(),
+  kind: text('kind').notNull(),
+  data: text('data').notNull(),
+}, t => [primaryKey({columns:[t.date,t.kind]})]);
+export const settingsVersions = sqliteTable('settings_versions', {
+  user_id: text('user_id').notNull(),
+  effective_at: text('effective_at').notNull(),
+  data: text('data').notNull(),
+}, t => [primaryKey({columns:[t.user_id,t.effective_at]})]);
+export const automationRules = sqliteTable('automation_rules', {
+  id: text('id').primaryKey().notNull(),
+  user_id: text('user_id').notNull(),
+  config: text('config').notNull(),
+  updated_at: text('updated_at').notNull(),
+});
+export const automationState = sqliteTable('automation_state', {
+  rule_id: text('rule_id').primaryKey().notNull(),
+  data: text('data').notNull(),
+});
+export const automationRuns = sqliteTable('automation_runs', {
+  id: text('id').primaryKey().notNull(),
+  rule_id: text('rule_id').notNull(),
+  started_at: text('started_at').notNull(),
+  status: text('status').notNull(),
+  reason: text('reason'),
+  inputs: text('inputs').notNull().default('[]'),
+}, t => [index('idx_automation_runs_time').on(t.started_at)]);
+export const automationActions = sqliteTable('automation_actions', {
+  run_id: text('run_id').notNull(),
+  action_index: integer('action_index').notNull(),
+  command_id: integer('command_id'),
+  status: text('status').notNull(),
+  error: text('error'),
+}, t => [primaryKey({columns:[t.run_id,t.action_index]})]);
+export const automationControl = sqliteTable('automation_control', {
+  id: text('id').primaryKey().notNull(),
+  paused: integer('paused').notNull().default(0),
+});
+export const channelOverrides = sqliteTable('channel_overrides', {
+  device_id: text('device_id').notNull(),
+  code: text('code').notNull(),
+  until: text('until').notNull(),
+}, t => [primaryKey({columns:[t.device_id,t.code]})]);
+export const tuyaGroups = sqliteTable('tuya_groups', {
+  id: text('id').primaryKey().notNull(),
+  name: text('name').notNull(),
+  actions: text('actions').notNull(),
+});
+export const commandContext = sqliteTable('command_context', {
+  command_id: integer('command_id').primaryKey().notNull(),
+  raw_value: text('raw_value').notNull(),
+  origin: text('origin').notNull(),
+  run_id: text('run_id'),
+  expires_at: text('expires_at').notNull(),
+});
+export const solarRawFields = sqliteTable('solar_raw_fields', {
+  entity_id: text('entity_id').notNull(),
+  source_timestamp: text('source_timestamp').notNull(),
+  data: text('data').notNull(),
+  collected_at: text('collected_at').notNull(),
+}, t => [primaryKey({columns:[t.entity_id,t.source_timestamp]})]);
+export const tuyaObservations = sqliteTable('tuya_observations', {
+  device_id: text('device_id').notNull(),
+  code: text('code').notNull(),
+  value_json: text('value_json').notNull(),
+  source_timestamp: text('source_timestamp').notNull(),
+  observed_at: text('observed_at').notNull(),
+  quality: text('quality').notNull(),
+}, t => [primaryKey({columns:[t.device_id,t.code,t.observed_at]}),index('idx_tuya_observed').on(t.device_id,t.observed_at)]);
+export const tuyaScenes = sqliteTable('tuya_scenes', {
+  home_id: text('home_id').notNull(),
+  scene_id: text('scene_id').notNull(),
+  name: text('name').notNull(),
+  updated_at: text('updated_at').notNull(),
+}, t => [primaryKey({columns:[t.home_id,t.scene_id]})]);
+export const capabilityVersions = sqliteTable('capability_versions', {
+  device_id: text('device_id').notNull(),
+  effective_at: text('effective_at').notNull(),
+  data: text('data').notNull(),
+}, t => [primaryKey({columns:[t.device_id,t.effective_at]})]);
+export const historyCoverage = sqliteTable('history_coverage', {
+  source: text('source').notNull(),
+  entity_id: text('entity_id').notNull(),
+  date: text('date').notNull(),
+  status: text('status').notNull(),
+  recorded_at: text('recorded_at').notNull(),
+}, t => [primaryKey({columns:[t.source,t.entity_id,t.date]})]);
+
+export const automationActivity = sqliteTable('automation_activity', {
+  id: integer('id').primaryKey({autoIncrement:true}), rule_id: text('rule_id').notNull(),
+  run_id: text('run_id'), command_id: integer('command_id'), occurred_at: text('occurred_at').notNull(),
+  status: text('status').notNull(), reason: text('reason').notNull().default(''),
+  inputs: text('inputs').notNull().default('[]'), previous_inputs: text('previous_inputs').notNull().default('[]'),
+  rule_snapshot: text('rule_snapshot').notNull().default('{}'),
+}, t=>[index('idx_activity_rule_time').on(t.rule_id,t.occurred_at),index('idx_activity_time').on(t.occurred_at)]);
+export const providerBudget = sqliteTable('provider_budget', {
+  provider:text('provider').notNull(), period:text('period').notNull(), used:integer('used').notNull().default(0),
+}, t=>[primaryKey({columns:[t.provider,t.period]})]);
+export const periodCoverage = sqliteTable('period_coverage', {
+  provider:text('provider').notNull(), entity_id:text('entity_id').notNull(), period:text('period').notNull(),
+  status:text('status').notNull(), updated_at:text('updated_at').notNull(),
+},t=>[primaryKey({columns:[t.provider,t.entity_id,t.period]})]);
+export const upgradeBackup = sqliteTable('upgrade_backup', {
+  kind:text('kind').notNull(), record_key:text('record_key').notNull(), data:text('data').notNull(),
+},t=>[primaryKey({columns:[t.kind,t.record_key]})]);

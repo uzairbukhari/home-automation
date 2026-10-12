@@ -1,0 +1,3 @@
+import { getOwnerUser } from '@/lib/owner-auth';
+import { energyReports,csvReport } from '@/lib/reports';
+export async function GET(request:Request){const user=await getOwnerUser();if(!user)return Response.json({error:'Unauthorized'},{status:401});try{const params=new URL(request.url).searchParams,report=await energyReports(user.userId,params);if(params.get('format')==='csv')return new Response(csvReport(report),{headers:{'content-type':'text/csv; charset=utf-8','content-disposition':`attachment; filename="photon-energy-${report.from}-${report.to}.csv"`,'cache-control':'private, no-store'}});return Response.json(report,{headers:{'cache-control':'private, no-store'}});}catch(error){return Response.json({error:String(error)},{status:400});}}

@@ -1,0 +1,15 @@
+import { database } from './jobs';
+import { localDate,shiftDate } from './measurements';
+import { decodeTuya } from './tuya-format';
+import type { TuyaCapability } from './providers/tuya';
+import type { DailySummary } from './telemetry';
+export async function deviceHistory(deviceId:string,from:string,to:string,cursor=''){
+ const db=database(),catalog=await db.prepare("SELECT capabilities FROM device_catalog WHERE id=? AND source='tuya'").bind(deviceId).first<{capabilities:string}>();if(!catalog)throw new Error('Device is not linked to this home');
+ const caps=JSON.parse(catalog.capabilities) as TuyaCapability[],older=localDate(from)<shiftDate(localDate(),-90);
+ const commands=(await db.prepare('SELECT id,code,requested_value,status,error,requested_at,confirmed_at FROM tuya_command_log WHERE device_id=? AND julianday(requested_at)>=julianday(?) AND julianday(requested_at)<=julianday(?) ORDER BY requested_at DESC LIMIT 200').bind(deviceId,from,to).all()).results;
+ if(older){const summaries=(await db.prepare("SELECT period,data FROM telemetry_summaries WHERE source='tuya' AND entity_id=? AND granularity='day' AND period>=? AND period<=? ORDER BY period").bind(deviceId,localDate(from),localDate(to)).all<{period:string;data:string}>()).results,states=summaries.flatMap(row=>{const d=JSON.parse(row.data) as DailySummary;return Object.entries(d.metrics).filter(([,m])=>m.hours>0&&m.unit).map(([code,m])=>({code,value_json:JSON.stringify(m.integral/m.hours),numeric_value:m.integral/m.hours,unit:m.unit,source_timestamp:row.period+'T12:00:00+05:00'}));});return{states,commands,truncated:false,nextCursor:null,resolution:'day',note:'Detailed readings expire after 90 days; permanent daily summaries are shown.'};}
+ let afterTime='',afterCode='';if(cursor){try{const parsed=JSON.parse(atob(cursor));afterTime=parsed.time;afterCode=parsed.code;if(typeof afterTime!=='string'||typeof afterCode!=='string')throw new Error();}catch{throw new Error('Invalid history cursor');}}
+ const rows=await db.prepare("SELECT code,value_json,source_timestamp FROM (SELECT code,value_json,source_timestamp FROM tuya_device_state WHERE device_id=? UNION SELECT code,value_json,observed_at source_timestamp FROM tuya_observations WHERE device_id=? AND quality='good') WHERE source_timestamp>=? AND source_timestamp<=? AND (source_timestamp>? OR (source_timestamp=? AND code>?)) ORDER BY source_timestamp,code LIMIT 5001").bind(deviceId,deviceId,from,to,afterTime,afterTime,afterCode).all<{code:string;value_json:string;source_timestamp:string}>();
+ const normalized=rows.results.slice(0,5000).map(row=>{let raw:unknown=null;try{raw=JSON.parse(row.value_json);}catch{}const decoded=decodeTuya(raw as never,caps.find(c=>c.code===row.code));return{...row,numeric_value:decoded.numericValue,unit:decoded.unit};}),last=normalized.at(-1),nextCursor=rows.results.length>5000&&last?btoa(JSON.stringify({time:last.source_timestamp,code:last.code})):null;
+ return{states:normalized,commands,truncated:Boolean(nextCursor),nextCursor,resolution:'raw',note:null};
+}

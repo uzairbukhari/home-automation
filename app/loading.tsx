@@ -1,0 +1,1 @@
+export default function Loading(){return <section className="navigation-loading" role="status" aria-busy="true"><h2>Loading your saved data…</h2><div className="loading-skeleton"/><div className="loading-skeleton"/></section>;}
