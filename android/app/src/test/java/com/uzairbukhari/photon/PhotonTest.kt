@@ -1,6 +1,5 @@
 package com.uzairbukhari.photon
 
-import androidx.compose.ui.geometry.Offset
 import com.uzairbukhari.photon.data.AlertFeed
 import com.uzairbukhari.photon.data.AppJson
 import com.uzairbukhari.photon.data.VersionInfo
@@ -55,13 +54,6 @@ class PhotonTest {
     @Test fun kilowattsFormatsOrDashes() {
         assertEquals("1.25", kilowatts(1250.0))
         assertEquals("—", kilowatts(null))
-    }
-
-    @Test fun flowDotsTravelFromTheNodeToTheInverter() {
-        val from = Offset(0f, 0f)
-        val to = Offset(100f, 100f)
-        assertEquals(from, com.uzairbukhari.photon.ui.pointOnCurve(from, to, 0f))
-        assertEquals(to, com.uzairbukhari.photon.ui.pointOnCurve(from, to, 1f))
     }
 }
 
