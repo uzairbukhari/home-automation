@@ -63,15 +63,19 @@ class DevicesViewModel(private val graph: Graph) : ViewModel() {
                     val groups = async { runCatching { repo.read("/api/tuya/groups") }.getOrNull() }
                     val rooms = async { runCatching { repo.read("/api/tuya/rooms") }.getOrNull() }
                     val list = devices.await()
+                    val favoritesBody = favorites.await()
+                    val scenesBody = scenes.await()
+                    val groupsBody = groups.await()
+                    val roomsBody = rooms.await()
                     update { old ->
                         old.copy(
                             loading = false,
                             refreshing = false,
                             devices = AppJson.decodeFromString<DevicesResponse>(list.body).devices,
-                            favorites = favorites.await()?.let { f -> AppJson.decodeFromString<FavoritesResponse>(f.body).favorites.filter { it.kind == "device" }.map { it.itemId }.toSet() } ?: old.favorites,
-                            scenes = scenes.await()?.let { AppJson.decodeFromString<ScenesResponse>(it.body).scenes } ?: old.scenes,
-                            groups = groups.await()?.let { AppJson.decodeFromString<GroupsResponse>(it.body).groups } ?: old.groups,
-                            rooms = rooms.await()?.let { AppJson.decodeFromString<RoomsResponse>(it.body).rooms } ?: old.rooms,
+                            favorites = favoritesBody?.let { f -> AppJson.decodeFromString<FavoritesResponse>(f.body).favorites.filter { it.kind == "device" }.map { it.itemId }.toSet() } ?: old.favorites,
+                            scenes = scenesBody?.let { AppJson.decodeFromString<ScenesResponse>(it.body).scenes } ?: old.scenes,
+                            groups = groupsBody?.let { AppJson.decodeFromString<GroupsResponse>(it.body).groups } ?: old.groups,
+                            rooms = roomsBody?.let { AppJson.decodeFromString<RoomsResponse>(it.body).rooms } ?: old.rooms,
                             offline = list.fromCache,
                             error = null,
                         )
