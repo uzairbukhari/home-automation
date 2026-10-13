@@ -1,19 +1,178 @@
 'use client';
-import {ChartAlternative} from './presentation';
-import {useUrlState} from '@/hooks/use-app-navigation';
-import {useEffect,useState} from 'react';
-import {Line,LineChart,CartesianGrid,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
-import type {DessSnapshot} from '@/lib/providers/dessmonitor';
-import type {Settings} from '@/lib/settings';
-import type {SolarPoint} from '@/lib/solar-energy';
-import {localDate,shiftDate} from '@/lib/measurements';
-import {freshnessLabel} from '@/lib/freshness';
-const definitions={battery:{title:'Battery',metric:'battery_soc',series:'battery',unit:'%',fields:['battery_soc','battery_voltage','battery_charge_current','battery_discharge_current']},solar:{title:'Solar',metric:'solar_power',series:'solar',unit:'W',fields:['solar_power','solar_today','solar_total','inverter_temperature']},grid:{title:'Grid',metric:'grid_power',series:'grid',unit:'W',fields:['grid_power']},home:{title:'Home load',metric:'home_power',series:'home',unit:'W',fields:['home_power']}} as const;
-const metricLabels:Record<string,string>={battery_soc:'Charge',battery_voltage:'Voltage',battery_charge_current:'Charging current',battery_discharge_current:'Discharging current',solar_power:'Power now',solar_today:'Produced today',solar_total:'Lifetime production',grid_power:'Grid import',home_power:'Home load',inverter_temperature:'Inverter temperature'};
-export function EnergyDetail({entity,onClose,live,settings}:{entity:string;onClose:()=>void;live:DessSnapshot|null;settings:Settings}){
- const definition=definitions[entity as keyof typeof definitions]??definitions.solar;
- const [range,setRange]=useUrlState('detailPeriod','1',['1','7','30']),[points,setPoints]=useState<SolarPoint[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(true);
- useEffect(()=>{const controller=new AbortController(),to=localDate(),from=shiftDate(to,-Number(range)+1);fetch(`/api/solar/history?range=custom&from=${from}&to=${to}&granularity=${range==='30'?'day':range==='7'?'hour':'raw'}`,{signal:controller.signal}).then(async r=>{const data=await r.json() as {series:SolarPoint[];error?:string};if(!r.ok)throw new Error(data.error??'History unavailable');setPoints(data.series);setError('');}).catch(e=>{if(!controller.signal.aborted)setError(String(e));}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return()=>controller.abort();},[entity,range]);
- const reading=live?.readings.find(r=>r.metric===definition.metric),chart=points.map((p,i)=>({...p,gap:i>0&&Date.parse(p.sourceTimestamp)-Date.parse(points[i-1].sourceTimestamp)>(range==='30'?129600000:range==='7'?4500000:900000)})).flatMap(p=>p.gap?[{...p,[definition.series]:null},p]:[p]);
- return <section className="panel energy-detail"><button className="secondary-action" onClick={onClose}>Energy overview</button><div className="section-heading"><div><span className="eyebrow">Energy details</span><h2>{definition.title}</h2><p>{freshnessLabel(live?.updatedAt)}</p></div><select aria-label="Detail history period" value={range} onChange={e=>{setLoading(true);setRange(e.target.value);}}><option value="1">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></div><div className="energy-total"><strong>{reading?.value==null?'—':reading.value.toLocaleString('en',{maximumFractionDigits:1})}</strong><span>{definition.unit}</span></div><div className="detail-metrics">{live?.readings.filter(r=>(definition.fields as readonly string[]).includes(r.metric)).map(r=><div key={r.metric}><span>{metricLabels[r.metric]??r.metric.replaceAll('_',' ')}</span><strong>{r.value==null?'Unavailable':r.value.toLocaleString('en',{maximumFractionDigits:2})} {r.unit}</strong></div>)}</div>{loading?<p role="status">Loading saved history…</p>:error?<p role="alert">{error}</p>:!points.length?<p>No saved history for this period.</p>:<div className="main-chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={chart}><CartesianGrid vertical={false} stroke="var(--border)"/><XAxis dataKey="time" minTickGap={40}/><YAxis unit={definition.unit} width={65} domain={entity==='battery'?[0,100]:['auto','auto']}/><Tooltip contentStyle={{background:'var(--popover)',border:'1px solid var(--border)'}}/><Line name={definition.title} dataKey={definition.series} stroke={entity==='battery'?'var(--energy-battery)':entity==='solar'?'var(--energy-solar)':'var(--energy-home)'} strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></div>}<ChartAlternative headers={['Measurement (Asia/Karachi)',definition.title+' ('+definition.unit+')']} rows={points.map(point=>[new Date(point.sourceTimestamp).toLocaleString('en-PK',{timeZone:'Asia/Karachi'}),point[definition.series]])}/><p className="report-footnote">{entity==='battery'?`Reserve: ${settings.threshold}%. Battery health and cycle counts are not reported by this source.`:'Power is an instantaneous reading, not accumulated energy. Energy totals are shown only when supported by measured counters.'}</p></section>;
+import { ChartAlternative } from './presentation';
+import { useUrlState } from '@/hooks/use-app-navigation';
+import { useEffect, useState } from 'react';
+import { Line, LineChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import type { DessSnapshot } from '@/lib/providers/dessmonitor';
+import type { Settings } from '@/lib/settings';
+import type { SolarPoint } from '@/lib/solar-energy';
+import { localDate, shiftDate } from '@/lib/measurements';
+import { freshnessLabel } from '@/lib/freshness';
+const definitions = {
+  battery: {
+    title: 'Battery',
+    metric: 'battery_soc',
+    series: 'battery',
+    unit: '%',
+    fields: ['battery_soc', 'battery_voltage', 'battery_charge_current', 'battery_discharge_current'],
+  },
+  solar: {
+    title: 'Solar',
+    metric: 'solar_power',
+    series: 'solar',
+    unit: 'W',
+    fields: ['solar_power', 'solar_today', 'solar_total', 'inverter_temperature'],
+  },
+  grid: { title: 'Grid', metric: 'grid_power', series: 'grid', unit: 'W', fields: ['grid_power'] },
+  home: { title: 'Home load', metric: 'home_power', series: 'home', unit: 'W', fields: ['home_power'] },
+} as const;
+const metricLabels: Record<string, string> = {
+  battery_soc: 'Charge',
+  battery_voltage: 'Voltage',
+  battery_charge_current: 'Charging current',
+  battery_discharge_current: 'Discharging current',
+  solar_power: 'Power now',
+  solar_today: 'Produced today',
+  solar_total: 'Lifetime production',
+  grid_power: 'Grid import',
+  home_power: 'Home load',
+  inverter_temperature: 'Inverter temperature',
+};
+export function EnergyDetail({
+  entity,
+  onClose,
+  live,
+  settings,
+}: {
+  entity: string;
+  onClose: () => void;
+  live: DessSnapshot | null;
+  settings: Settings;
+}) {
+  const definition = definitions[entity as keyof typeof definitions] ?? definitions.solar;
+  const [range, setRange] = useUrlState('detailPeriod', '1', ['1', '7', '30']),
+    [points, setPoints] = useState<SolarPoint[]>([]),
+    [error, setError] = useState(''),
+    [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const controller = new AbortController(),
+      to = localDate(),
+      from = shiftDate(to, -Number(range) + 1);
+    fetch(
+      `/api/solar/history?range=custom&from=${from}&to=${to}&granularity=${range === '30' ? 'day' : range === '7' ? 'hour' : 'raw'}`,
+      { signal: controller.signal },
+    )
+      .then(async (r) => {
+        const data = (await r.json()) as { series: SolarPoint[]; error?: string };
+        if (!r.ok) throw new Error(data.error ?? 'History unavailable');
+        setPoints(data.series);
+        setError('');
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(String(e));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [entity, range]);
+  const reading = live?.readings.find((r) => r.metric === definition.metric),
+    chart = points
+      .map((p, i) => ({
+        ...p,
+        gap:
+          i > 0 &&
+          Date.parse(p.sourceTimestamp) - Date.parse(points[i - 1].sourceTimestamp) >
+            (range === '30' ? 129600000 : range === '7' ? 4500000 : 900000),
+      }))
+      .flatMap((p) => (p.gap ? [{ ...p, [definition.series]: null }, p] : [p]));
+  return (
+    <section className="panel energy-detail">
+      <button className="secondary-action" onClick={onClose}>
+        Energy overview
+      </button>
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Energy details</span>
+          <h2>{definition.title}</h2>
+          <p>{freshnessLabel(live?.updatedAt)}</p>
+        </div>
+        <select
+          aria-label="Detail history period"
+          value={range}
+          onChange={(e) => {
+            setLoading(true);
+            setRange(e.target.value);
+          }}
+        >
+          <option value="1">Today</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+        </select>
+      </div>
+      <div className="energy-total">
+        <strong>
+          {reading?.value == null ? '—' : reading.value.toLocaleString('en', { maximumFractionDigits: 1 })}
+        </strong>
+        <span>{definition.unit}</span>
+      </div>
+      <div className="detail-metrics">
+        {live?.readings
+          .filter((r) => (definition.fields as readonly string[]).includes(r.metric))
+          .map((r) => (
+            <div key={r.metric}>
+              <span>{metricLabels[r.metric] ?? r.metric.replaceAll('_', ' ')}</span>
+              <strong>
+                {r.value == null ? 'Unavailable' : r.value.toLocaleString('en', { maximumFractionDigits: 2 })} {r.unit}
+              </strong>
+            </div>
+          ))}
+      </div>
+      {loading ? (
+        <p role="status">Loading saved history…</p>
+      ) : error ? (
+        <p role="alert">{error}</p>
+      ) : !points.length ? (
+        <p>No saved history for this period.</p>
+      ) : (
+        <div className="main-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chart}>
+              <CartesianGrid vertical={false} stroke="var(--border)" />
+              <XAxis dataKey="time" minTickGap={40} />
+              <YAxis unit={definition.unit} width={65} domain={entity === 'battery' ? [0, 100] : ['auto', 'auto']} />
+              <Tooltip contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)' }} />
+              <Line
+                name={definition.title}
+                dataKey={definition.series}
+                stroke={
+                  entity === 'battery'
+                    ? 'var(--energy-battery)'
+                    : entity === 'solar'
+                      ? 'var(--energy-solar)'
+                      : 'var(--energy-home)'
+                }
+                strokeWidth={2}
+                dot={false}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <ChartAlternative
+        headers={['Measurement (Asia/Karachi)', definition.title + ' (' + definition.unit + ')']}
+        rows={points.map((point) => [
+          new Date(point.sourceTimestamp).toLocaleString('en-PK', { timeZone: 'Asia/Karachi' }),
+          point[definition.series],
+        ])}
+      />
+      <p className="report-footnote">
+        {entity === 'battery'
+          ? `Reserve: ${settings.threshold}%. Battery health and cycle counts are not reported by this source.`
+          : 'Power is an instantaneous reading, not accumulated energy. Energy totals are shown only when supported by measured counters.'}
+      </p>
+    </section>
+  );
 }
