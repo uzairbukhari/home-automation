@@ -1,4 +1,5 @@
 import { database } from './jobs';
+import { historyCallsLeft } from './history-budget';
 import { lookbackDays } from './provider-sync';
 import { localDate, shiftDate } from './measurements';
 import { TuyaProvider } from './providers/tuya';
@@ -75,7 +76,10 @@ export async function meterHistoryStep(budgetMs = 25000) {
   const code = COUNTERS.find(has) ?? (has(INCREMENT) ? INCREMENT : null); if (!code) return { status: 'no_energy_register', codes: device.capabilities.map(c => c.code) };
   // Increment logs are stored as add_ele_log, decoded with add_ele's own scale and unit.
   const incrementCap = device.capabilities.find(c => c.code === INCREMENT), target = code === INCREMENT && incrementCap ? { ...device, capabilities: [...device.capabilities, { ...incrementCap, code: INCREMENT_LOG }] } : device;
-  const statistics = code === INCREMENT ? await deviceStatistics(device, INCREMENT, 8).catch(e => ({ written: 0, oldest: null, error: String(e), sample: null })) : null;
+  let left = await historyCallsLeft();
+  if (left < 1) return { status: 'budget_reached', meter: meter.name, code };
+  const statChunks = Math.min(2, left); left -= code === INCREMENT ? statChunks : 0;
+  const statistics = code === INCREMENT ? await deviceStatistics(device, INCREMENT, statChunks).catch(e => ({ written: 0, oldest: null, error: String(e), sample: null })) : null;
   const db = database(), key = `meter:${meter.id}`, provider = new TuyaProvider(), now = Date.now(), started = Date.now();
   const row = await db.prepare('SELECT from_ms,to_ms,cursor,covered_through FROM tuya_sync WHERE device_id=?').bind(key).first<{ from_ms: number | null; to_ms: number | null; cursor: string | null; covered_through: string | null }>();
   const floor = now - Math.max(lookbackDays(), 90) * DAY, resume = row?.cursor && row.from_ms && row.to_ms ? row : null;
@@ -83,12 +87,13 @@ export async function meterHistoryStep(budgetMs = 25000) {
   const firstDate = localDate(from), save = (covered: number, cursor: string, windowTo: number) =>
     db.prepare('INSERT INTO tuya_sync(device_id,from_ms,to_ms,cursor,covered_through,error) VALUES (?,?,?,?,?,?) ON CONFLICT(device_id) DO UPDATE SET from_ms=excluded.from_ms,to_ms=excluded.to_ms,cursor=excluded.cursor,covered_through=excluded.covered_through,error=excluded.error')
       .bind(key, cursor ? from : null, cursor ? windowTo : null, cursor || null, new Date(covered).toISOString(), lastError).run();
-  while (from < now && Date.now() - started < budgetMs) {
+  while (from < now && left > 0 && Date.now() - started < budgetMs) {
     const to = pendingTo || Math.min(now, from + DAY);
     let cursor = pending, complete = false;
     pending = ''; pendingTo = 0;
     try {
-      for (let page = 0; page < 60 && Date.now() - started < budgetMs; page++) {
+      for (let page = 0; page < 60 && left > 0 && Date.now() - started < budgetMs; page++) {
+        left--;
         const result = await provider.getLogPage(meter.id, [code], from, to, cursor);
         logs += await storeTuyaLogs(target, code === INCREMENT ? (result.logs ?? []).map(l => ({ ...l, code: INCREMENT_LOG })) : result.logs ?? []);
         if (!result.has_more || !result.last_row_key || result.last_row_key === cursor) { complete = true; break; }
