@@ -15,3 +15,13 @@ test('meter register becomes daily grid import regardless of reporting gaps',asy
  assert.ok(Math.abs(days.get('2026-10-11')-1.5)<1e-9);
  sqlite.close();
 });
+test('Tuya daily statistics fill device energy where no verified energy row exists',async()=>{
+ const {sqlite}=database(),{deviceEnergy}=require('../lib/device-energy.ts'),{localDate}=require('../lib/measurements.ts');
+ sqlite.prepare("INSERT INTO device_catalog(id,source,name,category,capabilities) VALUES ('plug2','tuya','Plug','cz','[]')").run();
+ const today=localDate();
+ sqlite.prepare("INSERT INTO solar_energy_periods(entity_id,period_type,period,grid_kwh,solar_source,grid_source,covered_hours,partial) VALUES ('plug2','day',?,1.25,'missing','device-statistics',24,0)").run(today);
+ const result=await deviceEnergy('plug2','7');
+ assert.equal(result.status,'available');
+ assert.ok(Math.abs(result.totalKwh-1.25)<1e-9);
+ sqlite.close();
+});
