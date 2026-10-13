@@ -31,7 +31,7 @@ from D1 also copies all existing D1 data (including the Android signing key) int
 Turso's `_import_log` table and never repeated. If D1 is still over its daily limit when that runs, the deploy fails
 before changing anything. Re-run it after the limit resets (midnight UTC).
 
-> **Why the app talks to Turso over a WebSocket:** a Worker on the free plan may make only 50 outbound `fetch()` requests per invocation, and one collection run issues well over 100 database queries. The app therefore opens a single WebSocket to Turso and sends every query through it (one request in total), falling back to plain HTTP if that fails. To force HTTP, set the Worker variable `TURSO_TRANSPORT=http`.
+> **Free-plan limit:** a Worker on the free plan may make only 50 outbound `fetch()` requests per invocation, and one collection run needs well over that many Turso calls (Turso's cloud does not accept WebSockets). Run the app on Vercel instead (see `docs/vercel-setup.md`) or use the Workers Paid plan.
 
 ## 4. Set the Worker secrets
 Workers & Pages → `home-dashboard` → Settings → Variables and Secrets (type **Secret**).

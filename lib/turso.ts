@@ -2,11 +2,10 @@
 // It implements only what the app uses from D1Database (prepare/bind/first/all/run/batch),
 // so every existing query keeps working unchanged. No dependencies: it only needs fetch.
 //
-// Why a WebSocket: on the Workers free plan a request may make at most 50 outbound fetch()
-// subrequests, and one collection run issues well over 100 queries. D1 bindings do not count
-// against that limit, but an HTTP call to Turso does. So the client opens ONE WebSocket per
-// busy period and sends every query over it (an upgrade is a single subrequest). If the
-// WebSocket cannot be used it falls back to plain HTTP requests.
+// Transport: plain HTTP (/v2/pipeline), one request per statement or batch. Turso's cloud no longer
+// accepts WebSocket upgrades, so the optional `connect` hook below is unused by the app. On Cloudflare's
+// free plan each HTTP call counts toward the 50-subrequest limit, so this client is meant for hosts without
+// that limit (Vercel, a paid Workers plan).
 
 type HranaValue = { type: 'null' } | { type: 'integer'; value: string } | { type: 'float'; value: number } | { type: 'text'; value: string } | { type: 'blob'; base64: string };
 type HranaResult = { cols: Array<{ name: string }>; rows: HranaValue[][]; affected_row_count: number; last_insert_rowid: string | null };
@@ -211,13 +210,4 @@ export function createTursoDatabase(config: TursoConfig): D1Database {
     async exec(sql: string) { await (new Statement(sql) as unknown as { run(): Promise<unknown> }).run(); return { count: 1, duration: 0 }; },
   };
   return database as unknown as D1Database;
-}
-
-// Opens a WebSocket from inside a Worker (an upgrade request is a single subrequest).
-export async function connectWorkerSocket(url: string): Promise<SocketLike> {
-  const response = await fetch(url.replace(/^wss:/, 'https:'), { headers: { Upgrade: 'websocket', 'Sec-WebSocket-Protocol': 'hrana3' } });
-  const socket = (response as unknown as { webSocket?: SocketLike & { accept(): void } }).webSocket;
-  if (!socket) throw new Error(`Turso did not accept the WebSocket upgrade (HTTP ${response.status}: ${(await response.text().catch(() => '')).slice(0, 200)})`);
-  socket.accept();
-  return socket;
 }
