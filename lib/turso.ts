@@ -217,7 +217,7 @@ export function createTursoDatabase(config: TursoConfig): D1Database {
 export async function connectWorkerSocket(url: string): Promise<SocketLike> {
   const response = await fetch(url.replace(/^wss:/, 'https:'), { headers: { Upgrade: 'websocket', 'Sec-WebSocket-Protocol': 'hrana3' } });
   const socket = (response as unknown as { webSocket?: SocketLike & { accept(): void } }).webSocket;
-  if (!socket) throw new Error('Turso did not accept the WebSocket upgrade');
+  if (!socket) throw new Error(`Turso did not accept the WebSocket upgrade (HTTP ${response.status}: ${(await response.text().catch(() => '')).slice(0, 200)})`);
   socket.accept();
   return socket;
 }
