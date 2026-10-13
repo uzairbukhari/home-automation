@@ -95,7 +95,7 @@ fun SettingsScreen(graph: Graph, model: SettingsViewModel, onMessage: (String) -
             when (current) {
                 "connections" -> ConnectionsPage(state, model)
                 "battery", "billing" -> BillingPage(current, state, model)
-                "notifications" -> AlertsPage(state, model)
+                "notifications" -> AlertsPage(state, model, onMessage)
                 "appearance" -> AppearancePage(graph)
                 "storage" -> StoragePage(state, model)
                 else -> AccountPage(graph, onMessage)
@@ -177,7 +177,7 @@ private fun BillingPage(which: String, state: SettingsState, model: SettingsView
 }
 
 @Composable
-private fun AlertsPage(state: SettingsState, model: SettingsViewModel) {
+private fun AlertsPage(state: SettingsState, model: SettingsViewModel, onMessage: (String) -> Unit) {
     LaunchedEffect(Unit) { model.loadAlerts() }
     val section = state.alerts
     val data = section.data
@@ -231,6 +231,17 @@ private fun AlertsPage(state: SettingsState, model: SettingsViewModel) {
         }
     }
     OutlinedButton(onClick = { adding = true }) { Text("Add device alert") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    OutlinedButton(
+        onClick = {
+            if (!com.uzairbukhari.photon.work.Notifications.canPost(context)) onMessage("Allow notifications for Photon in your phone's settings first.")
+            else model.sendTestAlert {
+                onMessage("Test alert sent. It should appear in a few seconds.")
+                com.uzairbukhari.photon.work.Scheduler.runOnce(context)
+            }
+        },
+        enabled = !section.offline,
+    ) { Text("Send test notification") }
     Button(onClick = { model.saveAlerts(rules) }, enabled = !state.saving && !section.offline && rules != base) { Text("Save alerts") }
     data.health?.let { h ->
         Hint(

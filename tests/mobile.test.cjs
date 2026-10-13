@@ -18,7 +18,7 @@ test('Owner access fails closed and rejects other signed-in accounts',async()=>{
 test('All data APIs require owner access; scheduler endpoints reject anonymous calls',async()=>{
   const routes=['connection-status','favorites','provider-credentials','settings','solar/latest','solar/history','solar/reports','tuya/devices','tuya/rooms','tuya/[id]','tuya/[id]/history','mobile/session','notifications/preferences'];
   const old=auth.user;auth.user={userId:'outsider',email:'other@example.com'};
-  try{for(const route of routes){const api=require(`../app/api/${route}/route.ts`);assert.equal((await api.GET(new Request('http://localhost/api/'+route),{params:Promise.resolve({id:'plug'})})).status,401,route);}for(const route of ['solar/collect','tuya/collect','notifications/evaluate','mobile/collect']){assert.equal((await require(`../app/api/${route}/route.ts`).POST(new Request('http://localhost/api/'+route,{method:'POST'}))).status,401);}}
+  try{for(const route of routes){const api=require(`../app/api/${route}/route.ts`);assert.equal((await api.GET(new Request('http://localhost/api/'+route),{params:Promise.resolve({id:'plug'})})).status,401,route);}for(const route of ['solar/collect','tuya/collect','notifications/evaluate','mobile/collect','mobile/test-alert']){assert.equal((await require(`../app/api/${route}/route.ts`).POST(new Request('http://localhost/api/'+route,{method:'POST'}))).status,401);}}
   finally{auth.user=old;}
 });
 test('Battery transitions deduplicate, recover and rearm; switches establish a baseline',()=>{

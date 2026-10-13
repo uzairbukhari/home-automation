@@ -129,6 +129,19 @@ class SettingsViewModel(private val graph: Graph) : ViewModel() {
         }
     }
 
+    /** Queues a test alert on the server; the caller then runs the background check to show it. */
+    fun sendTestAlert(onQueued: () -> Unit) {
+        viewModelScope.launch {
+            val note = try {
+                graph.api.post("/api/mobile/test-alert")
+                null
+            } catch (error: IOException) {
+                error.message ?: "Could not reach the server."
+            }
+            if (note == null) onQueued() else update { it.copy(message = note) }
+        }
+    }
+
     fun saveAlerts(rules: List<AlertRule>) {
         viewModelScope.launch {
             update { it.copy(saving = true) }
