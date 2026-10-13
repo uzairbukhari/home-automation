@@ -24,6 +24,7 @@ import { SolarCard, BatteryCard } from '@/components/energy-cards';
 import { EnergyScene } from '@/components/energy-scene/energy-scene';
 
 import { useFavorites } from '@/hooks/use-favorites';
+import { energyTabForChart } from '@/lib/energy-tabs';
 import { type ChartId } from '@/lib/favorites';
 import { defaults, type Settings } from '@/lib/settings';
 import type { TuyaDashboardDevice } from '@/lib/providers/tuya';
@@ -467,7 +468,7 @@ export default function Dashboard({ viewerName, page = 'overview' }: { viewerNam
                 <Link
                   className="insight-row"
                   key={id}
-                  href={`/solar?section=${id === 'power-history' || id === 'soc-history' ? 'history' : 'overview'}&chart=${id}`}
+                  href={`/solar?section=${energyTabForChart(id) ?? 'today'}&chart=${id}`}
                 >
                   <span>
                     {
@@ -525,7 +526,7 @@ export default function Dashboard({ viewerName, page = 'overview' }: { viewerNam
             </div>
           }
         >
-          <SolarDashboard live={live} settings={settings} pin={pin} showReports />
+          <SolarDashboard live={live} settings={settings} pin={pin} />
         </Suspense>
       )}
       {page === 'devices' && (

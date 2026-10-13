@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { readJson } from '@/lib/client-data';
 import { useUrlState } from '@/hooks/use-app-navigation';
 import { LoadingCards } from './presentation';
-import { EventsPanel } from './events-panel';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { ChartCard } from './energy/chart-card';
+import { SERIES, chartTick, chartTooltip, tooltipTrigger } from '@/lib/chart-theme';
 import { localDate } from '@/lib/measurements';
 import type { energyReports } from '@/lib/reports';
 type Report = Awaited<ReturnType<typeof energyReports>>;
@@ -37,42 +39,62 @@ function Delta({
   );
 }
 function TypicalDay({ days, hours }: { days: number; hours: NonNullable<Report['typicalDay']> }) {
-  const top = Math.max(100, ...hours.map((h) => Math.max(h.homeW ?? 0, h.solarW ?? 0))),
-    x = (hour: number) => 20 + hour * (560 / 23),
-    y = (w: number) => 140 - (w / top) * 120;
-  const line = (key: 'homeW' | 'solarW') =>
-    hours
-      .filter((h) => h[key] !== null)
-      .map((h) => `${x(h.hour).toFixed(1)},${y(h[key]!).toFixed(1)}`)
-      .join(' ');
+  const data = hours.map((h) => ({ hour: h.hour, home: h.homeW, solar: h.solarW }));
   return (
-    <figure className="report-chart">
-      <figcaption>
-        <strong>Typical day</strong> · average power by hour over {days} {days === 1 ? 'day' : 'days'}
-      </figcaption>
-      <svg
-        viewBox="0 0 600 170"
-        role="img"
-        aria-label="Average home and solar power for each hour of the day"
-        width="100%"
-      >
-        <line x1="20" x2="580" y1="140" y2="140" stroke="currentColor" opacity=".25" />
-        <polyline points={line('homeW')} fill="none" stroke="var(--chart-1,#0e7490)" strokeWidth="2.5" />
-        <polyline points={line('solarW')} fill="none" stroke="var(--chart-2,#d97706)" strokeWidth="2.5" />
-        {[0, 6, 12, 18, 23].map((h) => (
-          <text key={h} x={x(h)} y="160" fontSize="11" textAnchor="middle" fill="currentColor" opacity=".7">
-            {String(h).padStart(2, '0')}:00
-          </text>
-        ))}
-        <text x="20" y="14" fontSize="11" fill="currentColor" opacity=".7">
-          {Math.round(top)} W
-        </text>
-      </svg>
-      <p className="report-footnote">
-        <span style={{ color: 'var(--chart-1,#0e7490)' }}>■</span> Home{' '}
-        <span style={{ color: 'var(--chart-2,#d97706)' }}>■</span> Solar · Asia/Karachi hours
-      </p>
-    </figure>
+    <ChartCard
+      eyebrow="Typical day"
+      title="Average power by hour"
+      footnote={`Averaged over ${days} ${days === 1 ? 'day' : 'days'} of stored readings · Asia/Karachi hours`}
+    >
+      <div className="main-chart">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ left: 0, right: 18, top: 20 }}>
+            <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 7" />
+            <XAxis
+              dataKey="hour"
+              type="number"
+              domain={[0, 23]}
+              ticks={[0, 6, 12, 18, 23]}
+              tickFormatter={(h) => `${String(h).padStart(2, '0')}:00`}
+              tick={chartTick}
+            />
+            <YAxis tickFormatter={(n) => String(n / 1000)} unit=" kW" tick={chartTick} />
+            <Tooltip
+              trigger={tooltipTrigger()}
+              labelFormatter={(h) => `${String(h).padStart(2, '0')}:00`}
+              formatter={(n) => `${(Number(n) / 1000).toFixed(2)} kW`}
+              contentStyle={chartTooltip}
+            />
+            <Line
+              name="Home"
+              dataKey="home"
+              stroke={SERIES.home}
+              strokeWidth={2.5}
+              dot={false}
+              isAnimationActive={false}
+            />
+            <Line
+              name="Solar"
+              dataKey="solar"
+              stroke={SERIES.solar}
+              strokeWidth={2.5}
+              dot={false}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="series-controls" aria-label="Legend">
+        <span>
+          <span style={{ background: SERIES.home }} />
+          Home
+        </span>
+        <span>
+          <span style={{ background: SERIES.solar }} />
+          Solar
+        </span>
+      </div>
+    </ChartCard>
   );
 }
 export function ReportScreen() {
@@ -335,7 +357,7 @@ export function ReportScreen() {
             </p>
           </details>
           <div className="feature-toolbar">
-            <Link href="/solar?section=reports">Solar and battery performance</Link>
+            <Link href="/solar?section=trends">Solar and battery performance</Link>
             <Link href="/automations?section=activity">Automation activity</Link>
             <Link href="/settings?category=storage">Collection and storage health</Link>
           </div>
@@ -343,10 +365,5 @@ export function ReportScreen() {
       )}
     </section>
   );
-  return (
-    <>
-      {body}
-      <EventsPanel />
-    </>
-  );
+  return body;
 }

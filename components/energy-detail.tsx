@@ -43,8 +43,10 @@ export function EnergyDetail({
   onClose,
   live,
   settings,
+  embedded = false,
 }: {
   entity: string;
+  embedded?: boolean;
   onClose: () => void;
   live: DessSnapshot | null;
   settings: Settings;
@@ -88,9 +90,11 @@ export function EnergyDetail({
       .flatMap((p) => (p.gap ? [{ ...p, [definition.series]: null }, p] : [p]));
   return (
     <section className="panel energy-detail">
-      <button className="secondary-action" onClick={onClose}>
-        Energy overview
-      </button>
+      {!embedded && (
+        <button className="secondary-action" onClick={onClose}>
+          Energy overview
+        </button>
+      )}
       <div className="section-heading">
         <div>
           <span className="eyebrow">Energy details</span>

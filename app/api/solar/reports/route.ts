@@ -13,8 +13,9 @@ export async function GET(request:Request){
  try{
   const current=localDate(),url=new URL(request.url),year=url.searchParams.get('year')??current.slice(0,4),settings=await savedSettings(user.userId),threshold=Number(url.searchParams.get('threshold')??settings.threshold);
   if(!/^\d{4}$/.test(year)||Number(year)>Number(current.slice(0,4))||Number(year)<2000||!Number.isFinite(threshold)||threshold<0||threshold>100)throw new Error('Invalid reporting year or reserve');
+  const weekEnd=url.searchParams.get('weekEnd')??current;if(!/^\d{4}-\d{2}-\d{2}$/.test(weekEnd)||weekEnd>current||weekEnd<'2000-01-01')throw new Error('Invalid week');
   const errors:string[]=[];const snapshot=await cachedSnapshot();
-  const currentYear=current.slice(0,4),weekStart=shiftDate(current,-6),cycleStart=billingCycle(current,settings.billingDay),refreshing=false;
+  const currentYear=current.slice(0,4),weekStart=shiftDate(weekEnd,-6),cycleStart=billingCycle(current,settings.billingDay),refreshing=false;
   if(!snapshot)throw new Error('No saved solar readings are available');
   const entity=snapshot.device.serial;
   const [days,months,years]=await Promise.all([storedPeriods(entity,'day',`${year}-01-01`,year===current.slice(0,4)?current:`${year}-12-31`),storedPeriods(entity,'month',`${year}-01`,`${year}-12`),storedPeriods(entity,'year')]);
@@ -36,9 +37,9 @@ export async function GET(request:Request){
   const savings=directSolarSavings(billingDays.map(d=>({date:d.date,gridKwh:d.grid,directSolarKwh:d.report?.directSolarKwh??null,partial:d.partial})),settings.tariffSettings,settings.billingDay,settings.fixedCharges+settings.adjustments);
   const previousCycles=[];let previousEnd=shiftDate(cycleStart,-1);
   for(let i=0;i<2;i++){const previousStart=billingCycle(previousEnd,settings.billingDay),previousDays=await storedPeriods(entity,'day',previousStart,previousEnd),estimate=directSolarSavings(previousDays.map(d=>({date:d.date,gridKwh:d.grid,directSolarKwh:d.report?.directSolarKwh??null,partial:d.partial})),settings.tariffSettings,settings.billingDay,settings.fixedCharges+settings.adjustments);if(previousDays.length)previousCycles.push({...estimate,from:previousStart,to:previousEnd});previousEnd=shiftDate(previousStart,-1);}
-  const providerYear=reportedYear?.solar??null,monthlyTotal=currentMonths.reduce((n,d)=>n+(d.solar??0),0);const weekDays=await storedPeriods(entity,'day',weekStart,current);
+  const providerYear=reportedYear?.solar??null,monthlyTotal=currentMonths.reduce((n,d)=>n+(d.solar??0),0);const weekDays=await storedPeriods(entity,'day',weekStart,weekEnd);
   // Home, grid, direct-solar and battery energy come from per-day integration of the stored inverter readings; grid import comes from the upstream Tuya meter when there is one.
-  const {days:statDays,meter}=await dayStats(entity,`${year<currentYear?year:currentYear}-01-01`,current).catch(()=>({days:[] as DayStat[],meter:null})),gridOf=(d:DayStat)=>meter?d.meterGridKwh:d.inverterGridKwh;
+  const {days:statDays,meter}=await dayStats(entity,[`${year<currentYear?year:currentYear}-01-01`,weekStart].sort()[0],current).catch(()=>({days:[] as DayStat[],meter:null})),gridOf=(d:DayStat)=>meter?d.meterGridKwh:d.inverterGridKwh;
   const overlay=(report:typeof today,days:DayStat[])=>{const t=sumDays(days),grid=days.map(gridOf).filter((n):n is number=>n!==null);report.homeKwh=t.homeKwh;report.directSolarKwh=t.directSolarKwh;report.batteryChargeKwh=t.chargedKwh;report.batteryDischargeKwh=t.dischargedKwh;report.gridKwh=grid.length?grid.reduce((a,b)=>a+b,0):null;};
   overlay(today,statDays.filter(d=>d.date===current));overlay(month,statDays.filter(d=>d.date.startsWith(current.slice(0,7))));overlay(annual,statDays.filter(d=>d.date.startsWith(currentYear)));
   const fillGrid=<T extends {date:string;grid:number|null;home:number|null;gridSource:string}>(buckets:T[])=>buckets.map(b=>{const days=statDays.filter(d=>d.date.startsWith(b.date)),grid=days.map(gridOf).filter((n):n is number=>n!==null),home=days.map(d=>d.homeKwh).filter((n):n is number=>n!==null);return{...b,grid:grid.length?grid.reduce((a,c)=>a+c,0):b.grid,gridSource:grid.length?(meter?'meter':'inverter'):b.gridSource,home:home.length?home.reduce((a,c)=>a+c,0):b.home};});
