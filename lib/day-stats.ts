@@ -3,34 +3,28 @@ import { actualSummary } from './actual-energy';
 import { localDate, shiftDate } from './measurements';
 import { energyReport, sortedPoints, type SolarPoint } from './solar-energy';
 import { storedSamples } from './solar-store';
+import { counterDaily, gridMeter, type Meter } from './meter-history';
+export type { Meter };
 import type { DailySummary } from './telemetry';
 import { type DayStat } from './battery-stats';
 export { sumDays, batteryStats, WARRANTY_CYCLES, type DayStat, type BatteryStats } from './battery-stats';
 
-export type Meter = { id: string; name: string };
-
 const cache = new Map<string, DayStat>();
 
-/** The Tuya device that sees everything the grid delivers: flagged upstream, else a smart meter, else any energy meter. */
-export async function gridMeter(): Promise<Meter | null> {
-  const row = await database().prepare(`SELECT c.id,COALESCE(NULLIF(d.alias,''),c.name) name FROM device_catalog c LEFT JOIN device_details d ON c.id=d.device_id
-    WHERE c.source='tuya' AND (d.upstream=1 OR c.category='dlq' OR lower(c.name) LIKE '%smart meter%' OR lower(COALESCE(d.alias,'')) LIKE '%smart meter%')
-    ORDER BY (COALESCE(d.upstream,0)=1 AND (lower(c.name) LIKE '%smart meter%' OR lower(COALESCE(d.alias,'')) LIKE '%smart meter%')) DESC,(lower(c.name) LIKE '%smart meter pro%') DESC,COALESCE(d.upstream,0) DESC LIMIT 1`).first<Meter>();
-  return row ?? null;
-}
-
-/** Daily kWh from the meter's own energy counter; falls back to integrated power only where no counter exists. */
+/** Daily kWh: the meter's cumulative register first (immune to sparse reporting), then the per-day summaries for days it does not cover. */
 export async function meterDaily(meter: Meter, from: string, to: string) {
+  const days = await counterDaily(meter.id, from, to).catch(() => new Map<string, number>());
   const rows = await database().prepare("SELECT period,data,calculation_version FROM telemetry_summaries WHERE source='tuya' AND entity_id=? AND granularity='day' AND period>=? AND period<=? ORDER BY period")
     .bind(meter.id, from, to).all<{ period: string; data: string; calculation_version: number }>();
-  const days = new Map<string, number>();
+  const fromSummaries = new Map<string, number>();
   for (const row of rows.results) {
+    if (days.has(row.period)) continue;
     const raw = JSON.parse(row.data) as DailySummary, data = actualSummary(raw, row.calculation_version);
     let kwh = data.energyKwh;
     if (kwh === null) { const power = raw.metrics.cur_power; if (power?.unit === 'W' && power.hours > 0) kwh = power.integral / 1000; }
-    if (kwh !== null) days.set(row.period, (days.get(row.period) ?? 0) + kwh);
+    if (kwh !== null) fromSummaries.set(row.period, (fromSummaries.get(row.period) ?? 0) + kwh);
   }
-  return days;
+  return new Map([...fromSummaries, ...days]);
 }
 
 export async function firstSampleDate(entity: string) {
