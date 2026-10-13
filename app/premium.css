@@ -1376,6 +1376,8 @@ select {
   margin: 20px 0;
 }
 .battery-overview-grid {
+  display: grid;
+  gap: 20px;
   width: 100%;
   max-width: none;
 }
@@ -3250,6 +3252,9 @@ select {
 }
 .headline-numbers > div[data-tone='grid'] {
   border-top-color: var(--flow-grid-import);
+}
+.headline-numbers > div[data-tone='battery'] {
+  border-top-color: var(--flow-discharge);
 }
 .headline-numbers > div[data-tone='saving'] {
   border-top-color: var(--flow-charge);
