@@ -24,7 +24,7 @@ html{background:var(--background);scroll-padding-top:96px}body{font-size:16px;li
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 .app-logo.brand-mark,.photon-loading-logo.brand-mark{background:none;border-radius:0}.brand-mark .logo-mark{width:100%;height:100%;display:block}
 
-.overview-grid>.metrics-grid{grid-auto-rows:1fr}
+
 .energy-card .metric-top{flex-wrap:nowrap}
 .metric-chip{font-size:.75rem;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--muted);font-variant-numeric:tabular-nums}
 .hero-card:has(.energy-scene){grid-template-rows:auto 1fr}
@@ -43,3 +43,41 @@ html{background:var(--background);scroll-padding-top:96px}body{font-size:16px;li
 .soc-meter[data-tone=low] .soc-fill{background:var(--status-warn)}
 .soc-reserve{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;border-radius:2px;background:var(--foreground);opacity:.55}
 @media(prefers-reduced-motion:reduce){.soc-fill{transition:none}}
+
+/* Energy now: the scene fills its card, no header labels */
+.hero-card:has(.energy-scene){padding:0;gap:0;overflow:hidden}
+.hero-card .energy-scene{border:0;border-radius:0;height:100%}
+.hero-card:has(.energy-scene){grid-template-rows:1fr}
+/* Scenes and groups */
+.device-groups summary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;list-style:none;cursor:pointer}
+.device-groups summary::-webkit-details-marker{display:none}
+.group-count{font-size:.75rem;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--muted);color:var(--muted-foreground)}
+.group-action{margin-left:auto}
+.scene-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-bottom:12px}
+.scene-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:var(--muted);border:1px solid var(--border);border-radius:14px;min-width:0}
+.scene-card strong{font-size:.875rem;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.scene-card .secondary-action{flex-shrink:0;padding:6px 14px;min-height:34px}
+.scene-card .feature-toolbar{margin:0;flex-shrink:0}
+.scene-empty{font-size:.875rem;color:var(--muted-foreground)}
+@media(max-width:767px){.scene-grid{grid-template-columns:1fr}.group-action{margin-left:0}}
+/* Charts: less dead space under the plot */
+.chart-panel,.soc-card{gap:12px}
+.chart-alternative{margin-top:0}
+.chart-alternative summary{min-height:36px}
+.chart-panel .report-footnote,.soc-card .report-footnote{margin-top:0}
+/* Battery health */
+.battery-health-card{display:grid;gap:16px;align-content:start}
+.health-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.health-tile{display:grid;gap:6px;align-content:start;padding:14px;border-radius:16px;background:var(--muted);border:1px solid var(--border);min-width:0}
+.health-tile-top{display:flex;align-items:center;gap:8px;font-size:.8125rem;color:var(--muted-foreground)}
+.health-tile-top svg{width:16px;height:16px;color:var(--energy-battery)}
+.health-tile strong{font-size:1.75rem;font-weight:650;letter-spacing:-.04em;line-height:1.1;font-variant-numeric:tabular-nums}
+.health-tile strong small{font-size:.8125rem;font-weight:500;color:var(--muted-foreground);letter-spacing:0}
+.health-tile p{font-size:.75rem;color:var(--muted-foreground);line-height:1.5}
+.warranty-meter{height:8px;border-radius:8px;background:var(--border);overflow:hidden}
+.warranty-meter span{display:block;height:100%;border-radius:8px;background:var(--energy-battery)}
+.battery-health-card .system-stats{margin:0}
+.health-chart{display:grid;gap:6px;font-size:.8125rem;color:var(--muted-foreground)}
+.health-chart-body{height:150px;min-width:0}
+@media(max-width:767px){.health-tiles{grid-template-columns:1fr}.battery-health-card .system-stats{grid-template-columns:1fr 1fr}}
+.overview-grid>.metrics-grid{grid-auto-rows:1fr}
