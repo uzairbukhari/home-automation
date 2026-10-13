@@ -81,3 +81,5 @@ html{background:var(--background);scroll-padding-top:96px}body{font-size:16px;li
 .health-chart-body{height:150px;min-width:0}
 @media(max-width:767px){.health-tiles{grid-template-columns:1fr}.battery-health-card .system-stats{grid-template-columns:1fr 1fr}}
 .overview-grid>.metrics-grid{grid-auto-rows:1fr}
+
+.event-list{list-style:none;margin:0;padding:0;display:grid;gap:0}.event-list li{display:grid;grid-template-columns:130px 1fr;gap:2px 16px;padding:12px 0;border-top:1px solid var(--border)}.event-list time{grid-row:span 2;color:var(--muted-foreground);font-size:.8125rem;font-variant-numeric:tabular-nums}.event-list span{color:var(--muted-foreground);font-size:.8125rem}.event-list li[data-kind=alarm] strong{color:var(--destructive)}@media(max-width:560px){.event-list li{grid-template-columns:1fr}.event-list time{grid-row:auto}}
