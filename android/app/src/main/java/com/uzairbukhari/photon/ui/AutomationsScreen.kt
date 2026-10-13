@@ -158,9 +158,15 @@ private fun RuleCard(entry: RuleEntry, model: AutomationsViewModel, enabled: Boo
 
 @Composable
 private fun ActivityList(state: AutomationsState, model: AutomationsViewModel) {
+    // The log records every check; "Unmatched" is the constant background noise, so it is hidden unless asked for.
+    var showUnmatched by rememberSaveable { mutableStateOf(false) }
+    val shown = if (showUnmatched) state.activity else state.activity.filter { it.status != "unmatched" }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (state.activity.isEmpty()) item { Text("Nothing has happened yet.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        items(state.activity, key = { it.id }) { ActivityRow(it) }
+        item {
+            androidx.compose.material3.FilterChip(selected = showUnmatched, onClick = { showUnmatched = !showUnmatched }, label = { Text("Show unmatched checks") })
+        }
+        if (shown.isEmpty()) item { Text(if (state.activity.isEmpty()) "Nothing has happened yet." else "No rule has matched recently.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        items(shown, key = { it.id }) { ActivityRow(it) }
         if (state.nextCursor != null) item { TextButton(onClick = model::loadMoreActivity) { Text("Show older") } }
     }
 }
@@ -170,8 +176,8 @@ private fun ActivityRow(item: ActivityItem) {
     Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text(item.name.ifBlank { item.ruleId }, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall)
-                Text(item.status.replaceFirstChar { it.uppercase() }, color = statusColor(item.status), style = MaterialTheme.typography.labelMedium)
+                Text(item.name.ifBlank { item.ruleId }, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text(item.status.replaceFirstChar { it.uppercase() }, color = statusColor(item.status), style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 8.dp))
             }
             Text(item.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(freshnessLabel(parseInstant(item.occurredAt)).removePrefix("Updated "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
