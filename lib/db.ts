@@ -14,3 +14,8 @@ export function appDb(): D1Database {
   }
   return env.DB as D1Database;
 }
+
+export function dbDiagnostics() {
+  const db = appDb() as unknown as { diagnostics?: () => unknown } | undefined;
+  return db?.diagnostics ? { backend: 'turso', ...(db.diagnostics() as object) } : { backend: db ? 'd1' : 'none' };
+}
