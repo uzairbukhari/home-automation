@@ -1,7 +1,7 @@
+import { appDb } from './db';
 import { reserveProviderRequest } from './provider-policy';
-import { env } from 'cloudflare:workers';
 
-export function database() { if (!env.DB) throw new Error('Database is unavailable'); return env.DB; }
+export function database() { if (!appDb()) throw new Error('Database is unavailable'); return appDb(); }
 export const iso = (value: string) => new Date(/Z$|[+-]\d\d:\d\d$/.test(value) ? value : value.replace(' ', 'T') + 'Z').toISOString();
 export async function claimJob(id: string, intervalMs = 0, leaseMs = 240000, now = new Date(), force = false) {
   const db = database(), stamp = now.toISOString(), token = crypto.randomUUID();
@@ -20,7 +20,7 @@ export async function dueWork(id: string, intervalMs: number, work: () => Promis
 }
 // Shared across workers. A provider throttle suppresses subsequent requests until its deadline.
 export async function providerFetch(provider: 'tuya' | 'dessmonitor', purpose: string, url: string, init?: RequestInit) {
-  const db = env.DB, now = new Date().toISOString();
+  const db = appDb(), now = new Date().toISOString();
   if (db) { const blocked = await db.prepare('SELECT next_due FROM app_jobs WHERE id=?').bind(`throttle:${provider}`).first<{next_due:string}>(); if (blocked?.next_due && blocked.next_due > now) throw new Error(`${provider} rate limit: waiting before retry`); }
   await reserveProviderRequest(provider,purpose);
   let status: number | null = null, error: string | null = null;

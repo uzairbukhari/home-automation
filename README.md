@@ -102,7 +102,7 @@ Replace the filename with the pending migration and `DB` with your D1 binding na
 
 ## Photon collection and reporting
 
-Photon uses hosted Cloudflare D1 for ordinary dashboard, device, report and automation preview reads. A single combined collector supplies scheduled updates for both providers; browser polling reloads saved data only.
+Photon uses a hosted Turso (libSQL) database, reached over HTTPS, for ordinary dashboard, device, report and automation preview reads. A single combined collector supplies scheduled updates for both providers; browser polling reloads saved data only.
 
 Configure exactly one five-minute `POST /api/mobile/collect` job using the existing server collection secret in `x-collection-secret`. The hosting layer is public; application data and controls require the owner to sign in. Do not schedule a second provider collector. External job activation remains to be verified before enabling automation.
 

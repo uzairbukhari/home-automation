@@ -1,22 +1,31 @@
+import { appDb } from './db';
 import { actualSolarReport } from './actual-energy';
-import { env } from 'cloudflare:workers';
 import { DessMonitorProvider, type DessSnapshot, type ProviderPeriods } from './providers/dessmonitor';
 import { energyReport, sortedPoints, type SolarPoint, type EnergyBucket, type EnergyReport } from './solar-energy';
 import { localDate, shiftDate } from './measurements';
 import { summarizeSolarDay } from './telemetry';
 
-function db(){if(!env.DB)throw new Error('Solar history storage is unavailable');return env.DB;}
+function db(){if(!appDb())throw new Error('Solar history storage is unavailable');return appDb();}
 async function batch(statements:D1PreparedStatement[]){for(let i=0;i<statements.length;i+=80)await db().batch(statements.slice(i,i+80));}
+// Only rows that are new or changed are written: a five-minute collection re-reads the whole day
+// from DessMonitor, and rewriting identical rows is what exhausted the free write allowance.
 export async function saveSamples(entityId:string,points:SolarPoint[]){
- const sorted=sortedPoints(points);
- await batch(sorted.map(point=>db().prepare('INSERT INTO solar_samples (entity_id,source_timestamp,data) VALUES (?,?,?) ON CONFLICT(entity_id,source_timestamp) DO UPDATE SET data=excluded.data').bind(entityId,point.sourceTimestamp,JSON.stringify(point))));
+ const sorted=sortedPoints(points);if(!sorted.length)return 0;
+ const known=new Map<string,string>();
  for(const date of new Set(sorted.map(p=>localDate(p.sourceTimestamp)))){
+  const rows=await db().prepare('SELECT source_timestamp,data FROM solar_samples WHERE entity_id=? AND source_timestamp>=? AND source_timestamp<?').bind(entityId,new Date(`${date}T00:00:00+05:00`).toISOString(),new Date(`${shiftDate(date,1)}T00:00:00+05:00`).toISOString()).all<{source_timestamp:string;data:string}>();
+  for(const row of rows.results)known.set(row.source_timestamp,row.data);
+ }
+ const changed=sorted.filter(point=>known.get(point.sourceTimestamp)!==JSON.stringify(point));
+ await batch(changed.map(point=>db().prepare('INSERT INTO solar_samples (entity_id,source_timestamp,data) VALUES (?,?,?) ON CONFLICT(entity_id,source_timestamp) DO UPDATE SET data=excluded.data').bind(entityId,point.sourceTimestamp,JSON.stringify(point))));
+ const dates=new Set(changed.map(p=>localDate(p.sourceTimestamp)));
+ for(const date of dates){
   const full=await storedSamples(entityId,date,date),report=actualSolarReport(energyReport(full)),partial=report.partial||report.coveredHours<(date===localDate()?elapsedToday():23.5);
   await db().prepare(`INSERT INTO solar_energy_periods (entity_id,period_type,period,solar_kwh,grid_kwh,home_kwh,solar_source,grid_source,covered_hours,partial,report_json) VALUES (?,'day',?,?,?,?,?,?,?,?,?) ON CONFLICT(entity_id,period_type,period) DO UPDATE SET solar_kwh=CASE WHEN solar_energy_periods.solar_source LIKE 'provider:%' THEN solar_energy_periods.solar_kwh ELSE excluded.solar_kwh END,grid_kwh=CASE WHEN solar_energy_periods.grid_source LIKE 'provider:%' THEN solar_energy_periods.grid_kwh ELSE excluded.grid_kwh END,home_kwh=excluded.home_kwh,solar_source=CASE WHEN solar_energy_periods.solar_source LIKE 'provider:%' THEN solar_energy_periods.solar_source ELSE excluded.solar_source END,grid_source=CASE WHEN solar_energy_periods.grid_source LIKE 'provider:%' THEN solar_energy_periods.grid_source ELSE excluded.grid_source END,covered_hours=excluded.covered_hours,partial=excluded.partial,report_json=excluded.report_json,updated_at=CURRENT_TIMESTAMP`).bind(entityId,date,report.solarKwh,report.gridKwh,report.homeKwh,report.solarSource,report.gridKwh===null?'missing':'integrated',report.coveredHours,partial?1:0,JSON.stringify({...report,partial})).run();
  }
- for(const date of new Set(sorted.map(p=>localDate(p.sourceTimestamp))))await summarizeSolarDay(entityId,date);
- await rebuildPeriods(entityId);
- return sorted.length;
+ for(const date of dates)await summarizeSolarDay(entityId,date);
+ if(dates.size)await rebuildPeriods(entityId);
+ return changed.length;
 }
 function elapsedToday(){return(Date.now()-Date.parse(`${localDate()}T00:00:00+05:00`))/3_600_000;}
 export async function storedSamples(entityId:string,from:string,to:string){
@@ -35,7 +44,13 @@ export async function storedPeriods(entityId:string,type:'day'|'month'|'year',fr
  return rows.results.map(row=>({date:row.period,solar:row.solar_source.startsWith('provider:')||row.solar_source==='counter'?row.solar_kwh:null,grid:row.grid_source.startsWith('provider:')||row.grid_source==='measured-days'?row.grid_kwh:null,home:null,source:row.solar_source,gridSource:row.grid_source,coveredHours:row.covered_hours,partial:Boolean(row.partial),report:row.report_json?actualSolarReport(JSON.parse(row.report_json) as EnergyReport):null,updatedAt:row.updated_at}));
 }
 export async function saveRawFields(entityId:string,rawFields:NonNullable<DessSnapshot['rawFields']>){
- await batch(rawFields.map(item=>db().prepare('INSERT INTO solar_raw_fields(entity_id,source_timestamp,data,collected_at) VALUES (?,?,?,?) ON CONFLICT(entity_id,source_timestamp) DO UPDATE SET data=excluded.data,collected_at=excluded.collected_at WHERE solar_raw_fields.data!=excluded.data').bind(entityId,item.sourceTimestamp,JSON.stringify(item.fields),new Date().toISOString())));
+ if(!rawFields.length)return;
+ const known=new Map<string,string>();
+ for(const date of new Set(rawFields.map(item=>localDate(item.sourceTimestamp)))){
+  const rows=await db().prepare('SELECT source_timestamp,data FROM solar_raw_fields WHERE entity_id=? AND source_timestamp>=? AND source_timestamp<?').bind(entityId,new Date(`${date}T00:00:00+05:00`).toISOString(),new Date(`${shiftDate(date,1)}T00:00:00+05:00`).toISOString()).all<{source_timestamp:string;data:string}>();
+  for(const row of rows.results)known.set(row.source_timestamp,row.data);
+ }
+ await batch(rawFields.filter(item=>known.get(item.sourceTimestamp)!==JSON.stringify(item.fields)).map(item=>db().prepare('INSERT INTO solar_raw_fields(entity_id,source_timestamp,data,collected_at) VALUES (?,?,?,?) ON CONFLICT(entity_id,source_timestamp) DO UPDATE SET data=excluded.data,collected_at=excluded.collected_at WHERE solar_raw_fields.data!=excluded.data').bind(entityId,item.sourceTimestamp,JSON.stringify(item.fields),new Date().toISOString())));
 }
 export async function saveSnapshot(snapshot:DessSnapshot){
  await saveSamples(snapshot.device.serial,snapshot.series);

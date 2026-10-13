@@ -1,6 +1,6 @@
 # Photon database-first rollout
 
-Normal dashboard, device, connection, history, report, export and automation preview requests read Cloudflare D1 only. Explicit collection, commands and scene discovery/execution are the provider-facing operations.
+Normal dashboard, device, connection, history, report, export and automation preview requests read the database (Turso) only. Explicit collection, commands and scene discovery/execution are the provider-facing operations.
 
 ## Collection
 

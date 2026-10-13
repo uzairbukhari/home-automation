@@ -1,9 +1,9 @@
-import { env } from "cloudflare:workers";
+import { appDb } from '@/lib/db';
 import { getOwnerUser,sameOrigin } from "@/lib/owner-auth";
 import { encryptCredential } from "@/lib/credential-vault";
 
 const provider="dessmonitor";
-function database(){if(!env.DB)throw new Error("Credential storage is unavailable");return env.DB}
+function database(){if(!appDb())throw new Error("Credential storage is unavailable");return appDb()}
 function required(value:unknown,label:string,max=256){const text=String(value??"").trim();if(!text||text.length>max)throw new Error(`${label} is required`);return text}
 
 export async function GET(){

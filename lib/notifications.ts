@@ -1,3 +1,4 @@
+import { appDb } from './db';
 import { env } from 'cloudflare:workers';
 import { cachedDevices } from './tuya-store';
 import { savedSettings } from './settings-store';
@@ -7,7 +8,7 @@ import type { TuyaDashboardDevice } from './providers/tuya';
 import { decodeTuya } from './tuya-format';
 import { appAlertStatement,ensureAppAlerts } from './app-alerts';
 
-export function notificationDb(){if(!env.DB)throw new Error('Notification storage is unavailable.');return env.DB;}
+export function notificationDb(){if(!appDb())throw new Error('Notification storage is unavailable.');return appDb();}
 export function pushConfig(){const e=env as unknown as Record<string,unknown>;return {subject:String(e.VAPID_SUBJECT??''),publicKey:String(e.VAPID_PUBLIC_KEY??''),privateKey:String(e.VAPID_PRIVATE_KEY??'')};}
 export async function rulesFor(userId:string){return (await notificationDb().prepare('SELECT config FROM notification_rules WHERE user_id=? ORDER BY id').bind(userId).all<{config:string}>()).results.map(r=>JSON.parse(r.config) as AlertRule);}
 export async function saveRules(userId:string,input:unknown,devices:TuyaDashboardDevice[]){
