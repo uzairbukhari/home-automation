@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { env } from '@/lib/env';
 import { getSessionUser, signInPath } from '@/app/session-auth';
 import { safeReturnPath } from '@/lib/session';
 import { redirect } from 'next/navigation';

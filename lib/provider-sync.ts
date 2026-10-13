@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { env } from '@/lib/env';
 import { database } from './jobs';
 import { DessMonitorProvider } from './providers/dessmonitor';
 import { TuyaProvider } from './providers/tuya';

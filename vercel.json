@@ -1,6 +1,5 @@
 {
   "framework": "nextjs",
   "installCommand": "npm ci",
-  "buildCommand": "([ \"$VERCEL_ENV\" != production ] || node scripts/turso.mjs migrate) && next build",
-  "build": { "env": { "NEXT_ON_VERCEL": "1" } }
+  "buildCommand": "([ \"$VERCEL_ENV\" != production ] || node scripts/turso.mjs migrate) && next build"
 }

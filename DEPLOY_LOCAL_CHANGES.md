@@ -68,11 +68,11 @@ Do **not** add `.env.local`. It contains your DessMonitor and Tuya credentials a
 
 ## 5. Publish the change
 
-Push your branch, open a pull request, and merge it into `main` once the CI check is green. Merging deploys automatically to your Cloudflare account (see `docs/cloudflare-setup.md`). You can also run Actions → Deploy → Run workflow by hand. No one else needs to be involved.
+Push your branch, open a pull request, and merge it into `main` once the CI check is green. Merging deploys automatically to Vercel (see `docs/vercel-setup.md`).
 
 ## Before each deployment
 
 - Keep `.env.local` private and out of Git.
 - Run `npm run build` successfully.
 - Check `git status` so unrelated work is not included.
-- Confirm the deployed dashboard behaves correctly after release (Actions → Deploy shows the result).
+- Confirm the deployed dashboard behaves correctly after release (the Vercel dashboard shows each deployment).

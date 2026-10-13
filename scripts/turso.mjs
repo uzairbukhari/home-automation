@@ -1,6 +1,5 @@
-// Deploy-time helper for the Turso database (used by .github/workflows/deploy.yml).
+// Deploy-time helper for the Turso database (used by the Vercel build and .github/workflows/android-release.yml).
 //   node scripts/turso.mjs migrate            apply ./drizzle/*.sql that have not run yet
-//   node scripts/turso.mjs import <file.sql>  one-time copy of a D1 export (INSERT lines only), skipped once done
 //   node scripts/turso.mjs query "<sql>"      print the rows of a statement as JSON
 //   node scripts/turso.mjs exec "<sql>"       run a statement
 // Needs TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in the environment.
@@ -52,28 +51,10 @@ async function migrate() {
   console.log('migrations up to date');
 }
 
-// `wrangler d1 export --no-schema` writes one INSERT per line. Rows are applied with OR IGNORE,
-// so running this again can only add rows that are missing, never overwrite newer ones.
-async function importExport(file) {
-  await run('CREATE TABLE IF NOT EXISTS _import_log (name TEXT PRIMARY KEY, finished_at TEXT NOT NULL, statements INTEGER NOT NULL)');
-  if ((await run("SELECT name FROM _import_log WHERE name = 'd1'")).length) { console.log('D1 data was already copied; skipping.'); return; }
-  const skip = /^INSERT\s+(?:OR\s+\w+\s+)?INTO\s+"?(?:d1_migrations|_cf_\w+|_migrations|_import_log|sqlite_\w+)"?/i;
-  const inserts = readFileSync(file, 'utf8').split('\n').filter(line => /^INSERT\s/i.test(line) && !skip.test(line))
-    .map(line => line.replace(/^INSERT\s+(?:OR\s+\w+\s+)?INTO/i, 'INSERT OR IGNORE INTO').replace(/;\s*$/, ''));
-  console.log(`copying ${inserts.length} rows from D1`);
-  for (let i = 0; i < inserts.length; i += 200) {
-    await transaction(inserts.slice(i, i + 200));
-    if ((i / 200) % 25 === 0) console.log(`  ${Math.min(i + 200, inserts.length)} / ${inserts.length}`);
-  }
-  await run("INSERT INTO _import_log(name, finished_at, statements) VALUES ('d1', ?, ?)", [new Date().toISOString(), inserts.length]);
-  console.log('copy finished');
-}
-
 const [command, value] = process.argv.slice(2);
 try {
   if (command === 'migrate') await migrate();
-  else if (command === 'import') await importExport(value);
   else if (command === 'query') console.log(JSON.stringify(await run(value)));
   else if (command === 'exec') await run(value);
-  else { console.error('usage: turso.mjs migrate | import <file> | query <sql> | exec <sql>'); process.exit(2); }
+  else { console.error('usage: turso.mjs migrate | query <sql> | exec <sql>'); process.exit(2); }
 } catch (error) { console.error(error.message); process.exit(1); }

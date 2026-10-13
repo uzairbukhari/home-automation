@@ -30,7 +30,7 @@ pwsh -File scripts/build-android.ps1
 
 The script builds and checks the release, copies the APK to `outputs/android`, and verifies its signature. On another machine, install those official tools in the same directory structure (`jdk`, `gradle-8.13`, `sdk`), install SDK `platforms;android-36`, `build-tools;36.0.0`, and `platform-tools`, and restore the retained signing files before building. Gradle wrapper files are also committed. The script's temporary-directory override is process-local and addresses Java local sockets on this Windows machine.
 
-For web changes run `npm test`, `npm run lint`, and `npx tsc --noEmit`, then use the normal Sites publishing workflow. The build produces the offline asset manifest. Keep VAPID signing keys, collection secrets and provider credentials in server environment secrets. Apply the additive notification migration alongside the deployment; preserve the existing database.
+For web changes run `npm test`, `npm run lint`, and `npx tsc --noEmit`, then merge to `main`; Vercel deploys it. Keep VAPID signing keys, collection secrets and provider credentials in server environment secrets. Apply the additive notification migration alongside the deployment; preserve the existing database.
 
 ## Release checks
 
