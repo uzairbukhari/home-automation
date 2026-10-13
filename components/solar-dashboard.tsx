@@ -44,7 +44,7 @@ import { EnergyBalance } from './energy/energy-balance';
 import { SolarCalendar } from './energy/solar-calendar';
 import { HourHeatmap } from './energy/hour-heatmap';
 import { GridHealth } from './energy/grid-health';
-import { BatteryInsights } from './energy/battery-insights';
+import { BatteryInsights, InverterStrain } from './energy/battery-insights';
 import { BillOutlook, Baseload, SolarYield } from './energy/cost-insights';
 import { unprotectedRate } from '@/lib/tariff';
 import { SelfSufficiencyTrend } from './energy/self-sufficiency';
@@ -1134,6 +1134,7 @@ export function SolarDashboard({ live, settings, pin }: { live: DessSnapshot | n
                   chargedKwh={reports.year.batteryChargeKwh}
                   dischargedKwh={reports.year.batteryDischargeKwh}
                 />
+                <InverterStrain />
               </div>
             )}
           </>

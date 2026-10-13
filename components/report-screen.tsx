@@ -6,6 +6,7 @@ import { useUrlState } from '@/hooks/use-app-navigation';
 import { LoadingCards } from './presentation';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ChartCard } from './energy/chart-card';
+import { MoneySplit } from './energy/money-split';
 import { SERIES, chartTick, chartTooltip, tooltipTrigger } from '@/lib/chart-theme';
 import { localDate } from '@/lib/measurements';
 import type { energyReports } from '@/lib/reports';
@@ -259,6 +260,11 @@ export function ReportScreen() {
             ))}
           </div>
           {report.typicalDay && <TypicalDay days={report.typicalDays} hours={report.typicalDay} />}
+          <MoneySplit
+            devices={report.devices}
+            unmonitoredKwh={report.household.unmonitoredKwh}
+            periodLabel="in this period"
+          />
           {report.household.warning && <p className="device-notice">{report.household.warning}</p>}
           <p className="report-footnote">
             A dash means there is not enough recorded data for that total. Coverage and cost assumptions explain partial

@@ -97,3 +97,43 @@ export function yieldVerdict(points: YieldPoint[]) {
     best = points.reduce((a, b) => (b.kwhPerKw > a.kwhPerKw ? b : a));
   return `The array averaged ${average.toFixed(1)} kWh per kW per day over ${points.length} days, best ${best.kwhPerKw.toFixed(1)} on ${new Date(`${best.date}T12:00:00Z`).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' })}.`;
 }
+
+export type MoneyRow = { id: string; name: string; kwh: number; cost: number; share: number; unmonitored?: boolean };
+
+/** Appliances ranked by estimated cost, with each one's share of the total and the unmonitored remainder as its own row. */
+export function moneySplit(
+  devices: Array<{
+    id: string;
+    name: string;
+    energyKwh: number | null;
+    estimatedCost: number | null;
+    upstream?: boolean;
+  }>,
+  unmonitoredKwh: number | null | undefined,
+) {
+  const monitored = devices.filter(
+      (d) => !d.upstream && d.energyKwh !== null && d.estimatedCost !== null && d.estimatedCost > 0,
+    ),
+    kwh = monitored.reduce((n, d) => n + d.energyKwh!, 0),
+    cost = monitored.reduce((n, d) => n + d.estimatedCost!, 0),
+    rate = kwh > 0 ? cost / kwh : null,
+    rows: MoneyRow[] = monitored.map((d) => ({
+      id: d.id,
+      name: d.name,
+      kwh: d.energyKwh!,
+      cost: d.estimatedCost!,
+      share: 0,
+    }));
+  if (rate !== null && unmonitoredKwh && unmonitoredKwh > 0)
+    rows.push({
+      id: 'unmonitored',
+      name: 'Everything not monitored',
+      kwh: unmonitoredKwh,
+      cost: unmonitoredKwh * rate,
+      share: 0,
+      unmonitored: true,
+    });
+  const total = rows.reduce((n, r) => n + r.cost, 0);
+  for (const r of rows) r.share = total > 0 ? r.cost / total : 0;
+  return { rows: rows.sort((a, b) => b.cost - a.cost), total, rate };
+}

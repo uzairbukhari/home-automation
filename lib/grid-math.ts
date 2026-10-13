@@ -12,7 +12,14 @@ export const VOLTAGE_BANDS = [
 ] as const;
 export type VoltageBand = (typeof VOLTAGE_BANDS)[number][0];
 
-export type GridPoint = { stamp: number; voltage: number | null; frequency: number | null; homeW: number | null };
+export type GridPoint = {
+  stamp: number;
+  voltage: number | null;
+  frequency: number | null;
+  homeW: number | null;
+  loadPct?: number | null;
+  tempC?: number | null;
+};
 export type Outage = { start: string; end: string; minutes: number; homeKwh: number | null };
 export type GridDay = {
   date: string;
@@ -24,6 +31,8 @@ export type GridDay = {
   voltage: { min: number; max: number; avg: number } | null;
   frequency: { min: number; max: number } | null;
   bandHours: Record<VoltageBand, number>;
+  /** Inverter strain, added after the first rollups were stored, so older days lack it. */
+  inverter?: { peakLoadPct: number | null; hoursAbove80: number; maxTempC: number | null; avgTempC: number | null };
 };
 
 export const voltageBand = (v: number): VoltageBand =>
@@ -97,6 +106,15 @@ export function summarizeGrid(points: GridPoint[], date: string): GridDay {
   });
   close();
   if (day.voltage && weight > 0) day.voltage.avg = weighted / weight;
+  const loads = sorted.filter((p) => p.loadPct != null),
+    temps = sorted.filter((p) => p.tempC != null && p.tempC > 0);
+  if (loads.length || temps.length)
+    day.inverter = {
+      peakLoadPct: loads.length ? Math.max(...loads.map((p) => p.loadPct!)) : null,
+      hoursAbove80: loads.filter((p) => p.loadPct! > 80).length * (NOMINAL_MS / 3_600_000),
+      maxTempC: temps.length ? Math.max(...temps.map((p) => p.tempC!)) : null,
+      avgTempC: temps.length ? temps.reduce((n, p) => n + p.tempC!, 0) / temps.length : null,
+    };
   return day;
 }
 

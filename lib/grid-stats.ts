@@ -1,5 +1,5 @@
 import { database } from './jobs';
-import { localDate, normalizeMeasurement, shiftDate } from './measurements';
+import { finiteNumber, localDate, normalizeMeasurement, shiftDate } from './measurements';
 import { summarizeGrid, type GridDay, type GridPoint } from './grid-math';
 
 type RawRow = { source_timestamp: string; data: string };
@@ -18,6 +18,8 @@ function pointFrom(row: RawRow): GridPoint | null {
     voltage: read('grid voltage', 'V'),
     frequency: read('frequency of grid', 'Hz'),
     homeW: read('output active power', 'W'),
+    loadPct: read('output load percentage', '%'),
+    tempC: finiteNumber(fields['inverting temperature']?.value),
   };
 }
 
@@ -39,7 +41,7 @@ export async function summarizeGridDay(entity: string, date: string) {
   const day = summarizeGrid(points, date);
   await db
     .prepare(
-      "INSERT INTO telemetry_summaries(source,entity_id,granularity,period,room,data,updated_at,calculation_version) VALUES ('dessmonitor',?,?,?,'',?,?,1) ON CONFLICT(source,entity_id,granularity,period,room) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at",
+      "INSERT INTO telemetry_summaries(source,entity_id,granularity,period,room,data,updated_at,calculation_version) VALUES ('dessmonitor',?,?,?,'',?,?,2) ON CONFLICT(source,entity_id,granularity,period,room) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at,calculation_version=excluded.calculation_version",
     )
     .bind(entity, GRID_GRANULARITY, date, JSON.stringify(day), new Date().toISOString())
     .run();
@@ -72,7 +74,7 @@ export async function gridRollupStep(entity: string, backfill = 4) {
       (
         await db
           .prepare(
-            "SELECT period FROM telemetry_summaries WHERE source='dessmonitor' AND entity_id=? AND granularity=?",
+            "SELECT period FROM telemetry_summaries WHERE source='dessmonitor' AND entity_id=? AND granularity=? AND calculation_version>=2",
           )
           .bind(entity, GRID_GRANULARITY)
           .all<{ period: string }>()
