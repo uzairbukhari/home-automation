@@ -2,6 +2,8 @@ import { env } from 'cloudflare:workers';
 import { getOwnerUser } from '@/lib/owner-auth';
 import { runCollection } from '@/lib/collection';
 import { dbDiagnostics } from '@/lib/db';
+// Hosts that cap function time (Vercel) get the full minute a collection can need.
+export const maxDuration = 60;
 
 // Owner-only: run one collection now and return the full outcome, including the error text a scheduler
 // would only see as "502". Open it in the browser while signed in.
