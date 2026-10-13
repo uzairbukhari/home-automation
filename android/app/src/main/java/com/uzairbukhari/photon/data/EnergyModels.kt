@@ -88,6 +88,7 @@ data class ReportsResponse(
     val previousCycles: List<Savings> = emptyList(),
     val updatedAt: String? = null,
     val warnings: List<String> = emptyList(),
+    val gridMeter: String? = null,
 )
 
 @Serializable
@@ -121,4 +122,44 @@ data class AppliancesReport(
     val rooms: List<EnergyGroup> = emptyList(),
     val household: Household = Household(),
     val assumptions: List<String> = emptyList(),
+)
+
+@Serializable
+data class BatteryHealthEstimate(
+    val pct: Double = 0.0,
+    val estimatedCapacityKwh: Double = 0.0,
+    val samples: Int = 0,
+)
+
+@Serializable
+data class BatteryDay(
+    val date: String = "",
+    val chargedKwh: Double? = null,
+    val dischargedKwh: Double? = null,
+    val cycles: Double? = null,
+    val socMin: Double? = null,
+    val socMax: Double? = null,
+)
+
+/** GET /api/solar/battery */
+@Serializable
+data class BatteryStats(
+    val capacityKwh: Double? = null,
+    val warrantyCycles: Int = 3000,
+    val trackedDays: Int = 0,
+    val since: String? = null,
+    val chargedKwh: Double? = null,
+    val dischargedKwh: Double? = null,
+    val cycles: Double? = null,
+    val cyclesLast30: Double? = null,
+    val cyclesPerDay: Double? = null,
+    val warrantyUsedPct: Double? = null,
+    val cyclesRemaining: Double? = null,
+    val yearsRemaining: Double? = null,
+    val avgDepthPct: Double? = null,
+    val deepestPct: Double? = null,
+    val throughputKwh: Double? = null,
+    val health: BatteryHealthEstimate? = null,
+    val healthDays: Int = 0,
+    val daily: List<BatteryDay> = emptyList(),
 )

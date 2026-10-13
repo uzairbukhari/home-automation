@@ -8,6 +8,10 @@ Copy `outputs/android/Photon-1.0.1.apk` to your phone, open it, and allow instal
 
 Install later APKs over the existing installation. Do not uninstall first: upgrades require the same package name and signing key. Increment `versionCode` and `versionName` in `android/app/build.gradle` for each new release. Web interface updates do not require an APK update unless Android packaging changes.
 
+## Signed builds and updates
+
+Signed builds come from the "Android release" workflow (Actions tab, Run workflow). It signs with the key kept in Turso and publishes a GitHub Release containing `photon.apk` and `version.json`. The app checks the latest release for updates (Settings, Check for updates) and offers the download when its version code is higher. To install by hand, open https://github.com/uzairbukhari/home-automation/releases/latest/download/photon.apk on the phone.
+
 ## Offline reports
 
 Open the required screens and report periods online first. Successful viewed reports are stored privately for up to 30 days; revisiting a report replaces its saved copy. Close Photon and reopen with airplane mode enabled to check offline access. The banner shows the saved timestamp in Asia/Karachi. An unviewed period is unavailable. Commands and settings changes are disabled and are never queued. Sign-out and account changes delete private copies; signing out while offline still clears the copies locally, but the hosted sign-out needs a connection. Android/Chrome can evict browser storage, so this is convenience access rather than a backup.

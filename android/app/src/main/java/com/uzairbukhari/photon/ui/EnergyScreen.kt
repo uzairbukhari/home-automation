@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.uzairbukhari.photon.data.BatteryStats
 import com.uzairbukhari.photon.data.Bucket
 import com.uzairbukhari.photon.data.EnergyGroup
 import java.time.Instant
@@ -64,11 +65,12 @@ fun EnergyScreen(model: EnergyViewModel) {
             modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp),
         )
         TabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.background) {
-            listOf("Power", "Totals", "Appliances").forEachIndexed { i, name -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(name) }) }
+            listOf("Power", "Totals", "Battery", "Appliances").forEachIndexed { i, name -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(name) }) }
         }
         when (tab) {
             0 -> PowerTab(model)
             1 -> TotalsTab(model)
+            2 -> BatteryTab(model)
             else -> AppliancesTab(model)
         }
     }
@@ -183,6 +185,7 @@ private fun TotalsTab(model: EnergyViewModel) {
                     Stat("Battery in", kwh(data.month.batteryChargeKwh), Hues.Battery)
                     Stat("Battery out", kwh(data.month.batteryDischargeKwh), Hues.Battery)
                 }
+                Note(data.gridMeter?.let { "Grid import is measured by your $it." } ?: "Grid import is integrated from the inverter.")
             }
             data.savings?.let { savings ->
                 Card {
@@ -212,6 +215,73 @@ private fun TotalsTab(model: EnergyViewModel) {
             }
             data.warnings.forEach { Note(it) }
         }
+    }
+}
+
+private fun num(value: Double?, digits: Int = 1): String = if (value == null) "—" else "%,.${digits}f".format(Locale.US, value)
+
+@Composable
+private fun BatteryTab(model: EnergyViewModel) {
+    val state by model.battery.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { model.loadBattery() }
+    ScrollColumn {
+        Loading(state) { stats ->
+            val warranty = stats.warrantyCycles
+            val used = stats.warrantyUsedPct
+            Card {
+                Text("Equivalent cycles", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(num(stats.cycles, 1), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, color = Hues.Battery)
+                    Text("  of ${"%,d".format(Locale.US, warranty)}", Modifier.padding(bottom = 4.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Surface(Modifier.fillMaxWidth().height(6.dp), shape = RoundedCornerShape(3.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Box(Modifier.fillMaxWidth(((used ?: 0.0) / 100).toFloat().coerceIn(0.015f, 1f)).height(6.dp)) {
+                        Surface(Modifier.fillMaxSize(), shape = RoundedCornerShape(3.dp), color = Hues.Battery) {}
+                    }
+                }
+                Note(if (stats.cycles == null) "Waiting for recorded battery readings." else "${num(stats.cyclesRemaining, 0)} cycles left in your warranty · ${num(used, 2)}% used")
+            }
+            Card {
+                Text("Estimated health", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text(stats.health?.let { num(it.pct, 0) + "%" } ?: "—", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, color = Hues.Battery)
+                Note(
+                    stats.health?.let { "About ${num(it.estimatedCapacityKwh, 1)} of ${num(stats.capacityKwh, 1)} kWh usable, from ${it.samples} deep-cycle days." }
+                        ?: "Needs 3 days with a 20%+ swing in charge (${stats.healthDays} so far).",
+                )
+            }
+            Card {
+                Text("Projected warranty life", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                val years = stats.yearsRemaining
+                Text(
+                    if (years == null) "—" else (if (years > 30) "30+" else num(years, 1)) + " years",
+                    style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, color = Hues.Battery,
+                )
+                Note(if (stats.cyclesPerDay == null) "Needs recent usage to project." else "At your recent pace of ${num(stats.cyclesPerDay, 2)} cycles a day.")
+            }
+            Card {
+                BatteryRow("Lifetime throughput", num(stats.throughputKwh, 1) + " kWh")
+                BatteryRow("Cycles, last 30 days", num(stats.cyclesLast30, 1))
+                BatteryRow("Average depth of discharge", stats.avgDepthPct?.let { num(it, 0) + "%" } ?: "—")
+                BatteryRow("Deepest day", stats.deepestPct?.let { num(it, 0) + "%" } ?: "—")
+            }
+            if (stats.daily.isNotEmpty()) Card {
+                Text("Cycles per day · last ${stats.daily.size} days", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                BarChart(stats.daily.map { it.date.takeLast(5) }, listOf(ChartSeries("Cycles", Hues.Battery, stats.daily.map { it.cycles })), "cycles per day")
+            }
+            Note(batteryFootnote(stats))
+        }
+    }
+}
+
+private fun batteryFootnote(stats: BatteryStats): String =
+    (if (stats.since != null) "Tracking since ${stats.since}, ${stats.trackedDays} days. " else "") +
+        "A cycle is ${num(stats.capacityKwh, 1)} kWh discharged. Health is an estimate from energy per percent of charge, assuming 97% one-way efficiency; your battery does not report state of health."
+
+@Composable
+private fun BatteryRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 

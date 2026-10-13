@@ -514,6 +514,32 @@ private fun RouteBreakdown(flows: Flows, selected: FlowNode?) {
                     }
                 }
             }
+            if (selected == null) HomeMix(flows)
+        }
+    }
+}
+
+/** Share of the home's power from solar, battery and grid as one stacked bar. */
+@Composable
+private fun HomeMix(flows: Flows) {
+    val parts = listOf(
+        Triple("Solar", flows.solarToHome, Hues.Solar),
+        Triple("Battery", flows.batteryToHome, Hues.Discharging),
+        Triple("Grid", flows.gridToHome, Hues.Grid),
+    )
+    val total = parts.sumOf { it.second.toDouble() }.toFloat()
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Home is powered by", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+        if (total < 50f) {
+            Text("Home is idle", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            Row(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))) {
+                parts.filter { it.second > 0f }.forEach { (_, watts, color) -> Box(Modifier.weight(watts / total).fillMaxSize().background(color)) }
+            }
+            Text(
+                parts.joinToString(" · ") { (name, watts, _) -> "$name ${(watts / total * 100f).roundToInt()}%" },
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

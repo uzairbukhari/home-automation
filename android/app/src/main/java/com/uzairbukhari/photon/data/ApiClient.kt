@@ -35,7 +35,7 @@ private suspend fun Call.await(): Response = suspendCancellableCoroutine { cont 
 
 class ApiException(val status: Int, message: String) : IOException(message)
 
-/** Turns what a person typed ("home.example.workers.dev") into a clean https base URL, or null. */
+/** Turns what a person typed ("your-app.vercel.app") into a clean https base URL, or null. */
 fun normalizeServerUrl(input: String): String? {
     var text = input.trim().trimEnd('/')
     if (text.isEmpty()) return null
@@ -69,8 +69,8 @@ class ApiClient(private val session: Session) {
         session.signIn(base, token)
     }
 
-    /** A request without the token, for public files such as /app/version.json. */
-    suspend fun getPublic(path: String): String = execute(Request.Builder().url(url(path)).get().build(), authenticated = false)
+    /** A plain GET to an absolute URL without the token (redirects are followed), for public files such as GitHub release assets. */
+    suspend fun getAbsolute(url: String): String = execute(Request.Builder().url(url).get().build(), authenticated = false)
 
     suspend fun get(path: String): String = execute(Request.Builder().url(url(path)).get().build())
 

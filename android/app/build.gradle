@@ -15,7 +15,7 @@ android {
         applicationId 'com.uzairbukhari.photon'
         minSdk 29
         targetSdk 36
-        // CI release builds pass -PphotonVersionCode=<increasing number>; the app compares it with /app/version.json.
+        // CI release builds pass -PphotonVersionCode=<increasing number>; the app compares it with version.json on the latest GitHub release.
         def code = (project.findProperty('photonVersionCode') ?: '100').toInteger()
         versionCode code
         versionName "2.0.${code}"

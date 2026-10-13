@@ -2,7 +2,8 @@ name: Android release
 
 # Builds the signed release APK. The signing key is created once and kept in your private Turso
 # database (table app_signing), so every build is signed with the same key and phones can update in
-# place. Run it by hand from the Actions tab; the APK is attached to the run as an artifact.
+# place. Run it by hand from the Actions tab; the APK is published as a GitHub Release (photon.apk and
+# version.json), which the app checks for updates, and is also attached to the run as an artifact.
 # Needs TURSO_DATABASE_URL and TURSO_AUTH_TOKEN as secrets of the GitHub environment named "prod".
 on:
   workflow_dispatch:
@@ -10,6 +11,8 @@ on:
 jobs:
   release:
     environment: prod
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     env:
       TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
@@ -27,6 +30,7 @@ jobs:
       - name: Build the signed Android app
         env:
           RUN_NUMBER: ${{ github.run_number }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           [ -n "$TURSO_DATABASE_URL" ] && [ -n "$TURSO_AUTH_TOKEN" ] || { echo "::error::Add TURSO_DATABASE_URL and TURSO_AUTH_TOKEN to the 'prod' environment."; exit 1; }
@@ -44,9 +48,13 @@ jobs:
           echo "$row" | jq -r .keystore | base64 -d > "$RUNNER_TEMP/photon.p12"
           pw="$(echo "$row" | jq -r .password)"
           echo "::add-mask::$pw"
-          code=$((100 + RUN_NUMBER))
+          code=$((1000 + RUN_NUMBER))
           (cd android && PHOTON_KEYSTORE="$RUNNER_TEMP/photon.p12" PHOTON_STORE_PASSWORD="$pw" PHOTON_KEY_ALIAS=photon \
             ./gradlew --no-daemon :app:assembleRelease -PphotonVersionCode="$code")
+          cp android/app/build/outputs/apk/release/app-release.apk photon.apk
+          printf '{"versionCode":%s,"versionName":"2.0.%s","apk":"https://github.com/${{ github.repository }}/releases/latest/download/photon.apk"}\n' "$code" "$code" > version.json
+          gh release create "android-v2.0.$code" photon.apk version.json --title "Photon Android 2.0.$code" \
+            --notes "Signed release build from $GITHUB_SHA." --latest
       - uses: actions/upload-artifact@v4
         with:
           name: photon-release-apk

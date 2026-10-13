@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.uzairbukhari.photon.Graph
 import com.uzairbukhari.photon.data.AppJson
 import com.uzairbukhari.photon.data.AppliancesReport
+import com.uzairbukhari.photon.data.BatteryStats
 import com.uzairbukhari.photon.data.HistoryResponse
 import com.uzairbukhari.photon.data.ReportsResponse
 import kotlinx.coroutines.Job
@@ -25,9 +26,11 @@ class EnergyViewModel(private val graph: Graph) : ViewModel() {
     private val _history = MutableStateFlow(Section<HistoryResponse>())
     private val _reports = MutableStateFlow(Section<ReportsResponse>())
     private val _appliances = MutableStateFlow(Section<AppliancesReport>())
+    private val _battery = MutableStateFlow(Section<BatteryStats>())
     val history: StateFlow<Section<HistoryResponse>> = _history.asStateFlow()
     val reports: StateFlow<Section<ReportsResponse>> = _reports.asStateFlow()
     val appliances: StateFlow<Section<AppliancesReport>> = _appliances.asStateFlow()
+    val battery: StateFlow<Section<BatteryStats>> = _battery.asStateFlow()
     private val jobs = mutableMapOf<String, Job>()
 
     private fun <T> load(slot: String, flow: MutableStateFlow<Section<T>>, path: String, decode: (String) -> T) {
@@ -46,6 +49,7 @@ class EnergyViewModel(private val graph: Graph) : ViewModel() {
     fun loadHistory(range: String) = load("history", _history, "/api/solar/history?range=$range") { AppJson.decodeFromString<HistoryResponse>(it) }
     fun loadReports(year: String? = null) =
         load("reports", _reports, "/api/solar/reports" + (year?.let { "?year=$it" } ?: "")) { AppJson.decodeFromString<ReportsResponse>(it) }
+    fun loadBattery() = load("battery", _battery, "/api/solar/battery") { AppJson.decodeFromString<BatteryStats>(it) }
     fun loadAppliances(range: String) = load("appliances", _appliances, "/api/reports?range=$range") { AppJson.decodeFromString<AppliancesReport>(it) }
 
     companion object {

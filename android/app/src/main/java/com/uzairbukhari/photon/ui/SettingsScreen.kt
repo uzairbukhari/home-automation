@@ -324,9 +324,9 @@ private fun AccountPage(graph: Graph, onMessage: (String) -> Unit) {
         onClick = {
             checking = true
             scope.launch {
-                val info = UpdateChecker(graph.api) { graph.session.serverUrl }.newer()
+                val info = UpdateChecker(graph.api).newer()
                 checking = false
-                val url = info?.let { UpdateChecker(graph.api) { graph.session.serverUrl }.apkUrl(it) }
+                val url = info?.let { UpdateChecker(graph.api).apkUrl(it) }
                 if (url == null) onMessage("You have the latest version.")
                 else context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             }
