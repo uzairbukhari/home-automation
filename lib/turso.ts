@@ -58,6 +58,13 @@ function rowsOf(result: HranaResult) {
 const metaOf = (result: HranaResult) => ({ changes: result.affected_row_count ?? 0, last_row_id: result.last_insert_rowid === null || result.last_insert_rowid === undefined ? 0 : Number(result.last_insert_rowid), rows_written: result.affected_row_count ?? 0, duration: 0 });
 const wrap = (result: HranaResult) => ({ success: true as const, results: rowsOf(result), meta: metaOf(result) });
 
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
+  });
+}
+
 const REQUEST_TIMEOUT_MS = 25_000, READY_TIMEOUT_MS = 8_000, WS_COOLDOWN_MS = 60_000;
 
 // One WebSocket speaking Hrana 3 (JSON) with a single stream, so statements run in the order they are sent.
@@ -112,9 +119,12 @@ class SocketConnection {
 export function createTursoDatabase(config: TursoConfig): D1Database {
   const base = config.url.replace(/^libsql:\/\//, 'https://').replace(/^wss?:\/\//, 'https://').replace(/\/+$/, '');
   const doFetch = config.fetch ?? fetch, idleMs = config.idleMs ?? 4000;
-  let connection: SocketConnection | undefined, opening: Promise<SocketConnection> | undefined, socketsBlockedUntil = 0;
+  let connection: SocketConnection | undefined, socketsBlockedUntil = 0;
+  // Visible through /api/admin/collect-debug so a failing transport can be diagnosed without Worker logs.
+  const stats = { socketsOpened: 0, socketFailures: 0, httpRequests: 0, lastSocketError: null as string | null, lastRequestError: null as string | null };
 
   async function viaHttp(request: HranaRequest): Promise<unknown> {
+    stats.httpRequests++;
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -144,14 +154,19 @@ export function createTursoDatabase(config: TursoConfig): D1Database {
     if (!config.connect || Date.now() < socketsBlockedUntil) return undefined;
     if (connection && (connection.closed || Date.now() - connection.lastUsed > idleMs)) { connection.close(); connection = undefined; }
     if (connection) return connection;
-    opening ??= (async () => {
-      const next = new SocketConnection(await config.connect!(`${base.replace(/^https:/, 'wss:')}`), config.token);
+    // Not shared between callers: a connection attempt must never be awaited from a different request.
+    try {
+      const next = new SocketConnection(await withTimeout(config.connect(base.replace(/^https:/, 'wss:')), READY_TIMEOUT_MS, 'Turso WebSocket connect timed out'), config.token);
       try { await next.ready; } catch (error) { next.close(); throw error; }
+      stats.socketsOpened++;
       connection = next;
       return next;
-    })().finally(() => { opening = undefined; });
-    try { return await opening; }
-    catch { socketsBlockedUntil = Date.now() + WS_COOLDOWN_MS; return undefined; }
+    } catch (error) {
+      stats.socketFailures++;
+      stats.lastSocketError = error instanceof Error ? error.message : String(error);
+      socketsBlockedUntil = Date.now() + WS_COOLDOWN_MS;
+      return undefined;
+    }
   }
 
   async function send(request: HranaRequest): Promise<unknown> {
@@ -159,6 +174,7 @@ export function createTursoDatabase(config: TursoConfig): D1Database {
     if (!ws) return viaHttp(request);
     try { return await ws.request(request); }
     catch (error) {
+      stats.lastRequestError = error instanceof Error ? error.message : String(error);
       // Only a request that never left this process is safe to repeat on another transport.
       if ((error as { notSent?: boolean }).notSent) { connection = undefined; return viaHttp(request); }
       throw error;
@@ -191,6 +207,7 @@ export function createTursoDatabase(config: TursoConfig): D1Database {
       if (failed) throw new Error(failed.message);
       return step_results.slice(1, n + 1).map(result => { if (!result) throw new Error('Turso batch step did not run'); return wrap(result); });
     },
+    diagnostics: () => ({ ...stats, socketsBlockedForMs: Math.max(0, socketsBlockedUntil - Date.now()) }),
     async exec(sql: string) { await (new Statement(sql) as unknown as { run(): Promise<unknown> }).run(); return { count: 1, duration: 0 }; },
   };
   return database as unknown as D1Database;
