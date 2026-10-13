@@ -188,7 +188,9 @@ private fun AlertsPage(state: SettingsState, model: SettingsViewModel) {
     val base = remember(data) {
         val have = data.rules
         have + listOf(
-            AlertRule("battery", "low_battery", false, true, threshold = null),
+            AlertRule("battery", "low_battery", true, false, threshold = JsonPrimitive(20)),
+            AlertRule("high-load", "high_load", true, false, threshold = JsonPrimitive(2.5)),
+            AlertRule("rule-ran", "rule_ran", true, false),
             AlertRule("solar-stale", "stale_solar", false, true, threshold = JsonPrimitive(15)),
         ).filter { d -> have.none { it.id == d.id } }
     }
@@ -201,22 +203,28 @@ private fun AlertsPage(state: SettingsState, model: SettingsViewModel) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val title = when (rule.kind) {
                     "low_battery" -> "Battery is low"
+                    "high_load" -> "Home load is high"
+                    "rule_ran" -> "An automation changes a device"
                     "stale_solar" -> "Solar readings stop updating"
                     "device_offline" -> "${device(rule.deviceId)} goes offline"
                     "switch_change" -> "${device(rule.deviceId)} switches on or off"
                     else -> "${device(rule.deviceId)} · ${com.uzairbukhari.photon.data.friendlyLabel(rule.code.orEmpty())}"
                 }
                 SwitchRow(title, null, rule.enabled) { on -> rules = rules.map { if (it.id == rule.id) it.copy(enabled = on) else it } }
-                if (rule.kind == "low_battery" || rule.kind == "stale_solar") {
+                if (rule.kind == "low_battery" || rule.kind == "stale_solar" || rule.kind == "high_load") {
                     val value = (rule.threshold as? JsonPrimitive)?.content?.toDoubleOrNull()
                     NumberField(
-                        if (rule.kind == "low_battery") "Alert below (%) — blank uses your reserve" else "Alert after (minutes without data)",
+                        when (rule.kind) {
+                            "low_battery" -> "Alert at or below (%) — blank uses your reserve"
+                            "high_load" -> "Alert above (kW) — sustained a few minutes"
+                            else -> "Alert after (minutes without data)"
+                        },
                         value,
                         { n -> rules = rules.map { if (it.id == rule.id) it.copy(threshold = n?.let(::numberElement)) else it } },
                         Modifier.fillMaxWidth(),
                     )
                 }
-                if (rule.kind != "low_battery" && rule.kind != "stale_solar") {
+                if (rule.kind !in listOf("low_battery", "stale_solar", "high_load", "rule_ran")) {
                     TextButton(onClick = { rules = rules.filter { it.id != rule.id } }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
                 }
             }
