@@ -1,4 +1,5 @@
 import { database } from './jobs';
+import { historyCallsLeft } from './history-budget';
 import { lookbackDays } from './provider-sync';
 import { localDate, shiftDate } from './measurements';
 import { TuyaProvider, type TuyaDashboardDevice } from './providers/tuya';
@@ -44,9 +45,10 @@ export async function deviceStatistics(device: TuyaDashboardDevice, code = ENERG
 /** Every device that reports energy: fetch its statistics history, a few chunks each, stopping before the host's time limit. */
 export async function deviceStatisticsStep(budgetMs = 25000) {
   const started = Date.now(), devices = (await cachedDevices(true)).filter(d => d.capabilities.some(c => c.code === ENERGY_CODE)), results: Array<{ id: string; name: string; written: number; oldest: string | null; error: string | null }> = [];
+  let left = await historyCallsLeft();
   for (const device of devices) {
-    if (Date.now() - started > budgetMs) break;
-    try { const r = await deviceStatistics(device); results.push({ id: device.id, name: device.name, written: r.written, oldest: r.oldest, error: r.error }); }
+    if (Date.now() - started > budgetMs || left < 1) break;
+    try { const chunks = Math.min(2, left); left -= chunks; const r = await deviceStatistics(device, ENERGY_CODE, chunks); results.push({ id: device.id, name: device.name, written: r.written, oldest: r.oldest, error: r.error }); }
     catch (e) { results.push({ id: device.id, name: device.name, written: 0, oldest: null, error: e instanceof Error ? e.message : String(e) }); }
   }
   return { status: 'ok', devices: devices.length, results };
