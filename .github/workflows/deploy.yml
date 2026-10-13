@@ -1,12 +1,13 @@
 name: Deploy
 
-# Deploys main to your own Cloudflare account. The Cloudflare secrets, the Turso secrets and the
+# Deploys main to your own Cloudflare account. Production now runs on Vercel (docs/vercel-setup.md),
+# so this only runs when started by hand from the Actions tab; add `push: branches: [main]` back to
+# the triggers below to deploy to Cloudflare on every merge again.
+# The Cloudflare secrets, the Turso secrets and the
 # CLOUDFLARE_D1_DATABASE_ID variable live in the GitHub environment named "prod"
 # (see docs/cloudflare-setup.md). Data lives in Turso; the D1 binding is only kept so the
 # old data can be copied across once and as a fallback.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
