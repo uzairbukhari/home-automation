@@ -1,14 +1,175 @@
 'use client';
-import {OfflineLink as Link} from './app-shell';
-import type {ReactNode} from 'react';
-import {CircleHelp,MoreHorizontal,Trash2} from 'lucide-react';
-import {DropdownMenu,DropdownMenuTrigger,DropdownMenuContent,DropdownMenuItem} from './ui/dropdown-menu';
-import {AlertDialog,AlertDialogContent,AlertDialogHeader,AlertDialogTitle,AlertDialogDescription,AlertDialogFooter,AlertDialogCancel,AlertDialogAction} from './ui/alert-dialog';
-import {useState} from 'react';
+import { OfflineLink as Link } from './app-shell';
+import type { ReactNode } from 'react';
+import { CircleHelp, MoreHorizontal, Trash2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from './ui/alert-dialog';
+import { useState } from 'react';
 
-export function ChartAlternative({headers,rows}:{headers:string[];rows:Array<Array<string|number|null>>}){const [open,setOpen]=useState(false);return <details className="chart-alternative" onToggle={event=>setOpen(event.currentTarget.open)}><summary>View recorded chart data</summary>{open&&<div className="report-table-wrap"><table className="energy-table"><thead><tr>{headers.map(header=><th key={header} scope="col">{header}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={index}>{row.map((value,column)=><td key={column}>{value===null?'Unavailable':typeof value==='number'?value.toLocaleString('en-PK',{maximumFractionDigits:3}):value}</td>)}</tr>)}</tbody></table>{!rows.length&&<p>No recorded measurements for this period.</p>}</div>}</details>;}
+export function ChartAlternative({ headers, rows }: { headers: string[]; rows: Array<Array<string | number | null>> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="chart-alternative" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>View recorded chart data</summary>
+      {open && (
+        <div className="report-table-wrap">
+          <table className="energy-table">
+            <thead>
+              <tr>
+                {headers.map((header) => (
+                  <th key={header} scope="col">
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={index}>
+                  {row.map((value, column) => (
+                    <td key={column}>
+                      {value === null
+                        ? 'Unavailable'
+                        : typeof value === 'number'
+                          ? value.toLocaleString('en-PK', { maximumFractionDigits: 3 })
+                          : value}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!rows.length && <p>No recorded measurements for this period.</p>}
+        </div>
+      )}
+    </details>
+  );
+}
 
-export function EmptyState({title,note,action}:{title:string;note?:string;action?:ReactNode}){return <div className="empty-state" role="status"><CircleHelp/><strong>{title}</strong>{note&&<p>{note}</p>}{action}</div>;}
-export function LoadingCards({label,count=3}:{label:string;count?:number}){return <div className="loading-cards" role="status" aria-label={label} aria-busy="true">{Array.from({length:count},(_,i)=><div key={i} className="skeleton-card shimmer" aria-hidden="true"><span/><span/><span/></div>)}<span className="sr-only">{label}</span></div>;}
-export function ReportNavigation({selected}:{selected:'performance'|'appliances'|'billing'}){return <nav className="report-navigation" aria-label="Report type"><Link href="/solar?section=reports" aria-current={selected==='performance'?'page':undefined}>Performance</Link><Link href="/solar?section=reports&report=appliances" aria-current={selected==='appliances'?'page':undefined}>Appliances</Link><Link href="/solar?section=reports&report=billing" aria-current={selected==='billing'?'page':undefined}>Billing</Link></nav>;}
-export function DeleteMenu({name,disabled,onDelete}:{name:string;disabled?:boolean;onDelete:()=>Promise<void>}){const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');return <><DropdownMenu><DropdownMenuTrigger asChild><button className="icon-button" aria-label={`More options for ${name}`} disabled={disabled}><MoreHorizontal/></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem variant="destructive" onSelect={()=>{setError('');setOpen(true);}}><Trash2/>Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu><AlertDialog open={open} onOpenChange={next=>{if(!busy)setOpen(next);}}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {name}?</AlertDialogTitle><AlertDialogDescription>This removes the saved configuration. It will not change device power.</AlertDialogDescription></AlertDialogHeader>{error&&<p role="alert" className="notice error">{error}</p>}<AlertDialogFooter><AlertDialogCancel disabled={busy}>Keep it</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={async event=>{event.preventDefault();setBusy(true);try{await onDelete();setOpen(false);}catch(reason){setError(reason instanceof Error?reason.message:'Could not delete. Try again.');}finally{setBusy(false);}}}>{busy?'Deleting…':'Delete'}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></>;}
+export function EmptyState({ title, note, action }: { title: string; note?: string; action?: ReactNode }) {
+  return (
+    <div className="empty-state" role="status">
+      <CircleHelp />
+      <strong>{title}</strong>
+      {note && <p>{note}</p>}
+      {action}
+    </div>
+  );
+}
+export function LoadingCards({ label, count = 3 }: { label: string; count?: number }) {
+  return (
+    <div className="loading-cards" role="status" aria-label={label} aria-busy="true">
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="skeleton-card shimmer" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+      ))}
+      <span className="sr-only">{label}</span>
+    </div>
+  );
+}
+export function ReportNavigation({ selected }: { selected: 'performance' | 'appliances' | 'billing' }) {
+  return (
+    <nav className="report-navigation" aria-label="Report type">
+      <Link href="/solar?section=reports" aria-current={selected === 'performance' ? 'page' : undefined}>
+        Performance
+      </Link>
+      <Link
+        href="/solar?section=reports&report=appliances"
+        aria-current={selected === 'appliances' ? 'page' : undefined}
+      >
+        Appliances
+      </Link>
+      <Link href="/solar?section=reports&report=billing" aria-current={selected === 'billing' ? 'page' : undefined}>
+        Billing
+      </Link>
+    </nav>
+  );
+}
+export function DeleteMenu({
+  name,
+  disabled,
+  onDelete,
+}: {
+  name: string;
+  disabled?: boolean;
+  onDelete: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="icon-button" aria-label={`More options for ${name}`} disabled={disabled}>
+            <MoreHorizontal />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => {
+              setError('');
+              setOpen(true);
+            }}
+          >
+            <Trash2 />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AlertDialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!busy) setOpen(next);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the saved configuration. It will not change device power.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {error && (
+            <p role="alert" className="notice error">
+              {error}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={async (event) => {
+                event.preventDefault();
+                setBusy(true);
+                try {
+                  await onDelete();
+                  setOpen(false);
+                } catch (reason) {
+                  setError(reason instanceof Error ? reason.message : 'Could not delete. Try again.');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
