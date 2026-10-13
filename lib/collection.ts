@@ -9,6 +9,7 @@ import { cachedSnapshot, saveSnapshot, saveSamples, saveRawFields, syncPeriods }
 import { STORAGE_PRUNE_BYTES, storageBytes } from './backfill-ledger';
 import { alarmsUnit, documentsUnit, lookbackDays, tuyaEventsUnit } from './provider-sync';
 import { meterHistoryStep } from './meter-history';
+import { deviceHourlyStep } from './device-hourly';
 import { deviceStatisticsStep } from './device-statistics';
 import { evaluateAutomations } from './automations';
 import { reconcileCommands } from './commands';
@@ -65,6 +66,7 @@ export async function maintainCollection(){
       await dueWork('history-unit',300000,historyUnit);
       try{await dueWork('meter-history',1800000,()=>meterHistoryStep());}catch{/* The job row keeps the error; other maintenance still runs. */}
       try{await dueWork('device-statistics',1800000,()=>deviceStatisticsStep());}catch{/* Same: the job row keeps the error. */}
+      try{await dueWork('device-hourly',1800000,()=>deviceHourlyStep());}catch{/* Same: the job row keeps the error. */}
       for(const [id,interval,unit] of [['provider-documents',86400000,documentsUnit],['dessmonitor-alarms',3600000,alarmsUnit],['tuya-events',300000,tuyaEventsUnit]] as const){try{await dueWork(id,interval,unit);}catch{/* Job health and the backfill ledger carry the error; later steps still run. */}}
       await dueWork('retention',3600000,async()=>{const bytes=await storageBytes(),retained=await retentionStep(bytes!==null&&bytes>STORAGE_PRUNE_BYTES);const catalog=await database().prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();for(const c of catalog.results)await rebuildLongPeriods(c.source,c.id);return retained;});
       await dueWork('operations-summary',86400000,summarizeOperations);
