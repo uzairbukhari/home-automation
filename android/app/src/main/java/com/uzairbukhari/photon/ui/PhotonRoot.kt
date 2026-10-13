@@ -81,7 +81,7 @@ private fun SignedInApp(graph: Graph) {
         if (Build.VERSION.SDK_INT >= 33 && !Notifications.canPost(context)) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
     var update by remember { mutableStateOf<VersionInfo?>(null) }
-    LaunchedEffect(Unit) { update = UpdateChecker(graph.api) { graph.session.serverUrl }.newer() }
+    LaunchedEffect(Unit) { update = UpdateChecker(graph.api).newer() }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = MaterialTheme.colorScheme.background,
@@ -106,7 +106,7 @@ private fun SignedInApp(graph: Graph) {
             Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Update ${info.versionName} is ready", Modifier.weight(1f), color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    TextButton(onClick = { UpdateChecker(graph.api) { graph.session.serverUrl }.apkUrl(info)?.let { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) } }) { Text("Download") }
+                    TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker(graph.api).apkUrl(info)))) }) { Text("Download") }
                 }
             }
           }

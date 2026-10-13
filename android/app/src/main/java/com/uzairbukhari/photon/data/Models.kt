@@ -26,6 +26,18 @@ data class InverterDevice(
     val mode: String? = null,
 )
 
+/** Today's totals from GET /api/solar/latest?summary=1. */
+@Serializable
+data class DayToday(
+    val solarKwh: Double? = null,
+    val homeKwh: Double? = null,
+    val gridKwh: Double? = null,
+    val batteryChargeKwh: Double? = null,
+    val batteryDischargeKwh: Double? = null,
+    val peakSolarW: Double? = null,
+    val peakSolarAt: String? = null,
+)
+
 /** Response of GET /api/solar/latest (the series is not requested by the app). */
 @Serializable
 data class SolarLatest(
@@ -33,6 +45,7 @@ data class SolarLatest(
     val device: InverterDevice = InverterDevice(),
     val updatedAt: String? = null,
     val stale: Boolean = false,
+    val today: DayToday? = null,
 ) {
     fun value(metric: String): Double? = readings.firstOrNull { it.metric == metric }?.value
 

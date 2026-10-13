@@ -7,6 +7,9 @@ import com.uzairbukhari.photon.update.UpdateChecker
 import com.uzairbukhari.photon.data.asBoolean
 import com.uzairbukhari.photon.data.SolarLatest
 import com.uzairbukhari.photon.data.normalizeServerUrl
+import com.uzairbukhari.photon.ui.batteryStatus
+import com.uzairbukhari.photon.ui.duration
+import com.uzairbukhari.photon.ui.selfSufficiency
 import com.uzairbukhari.photon.ui.freshnessLabel
 import com.uzairbukhari.photon.ui.isStale
 import com.uzairbukhari.photon.data.batteryPower
@@ -165,6 +168,13 @@ class UpdateAndAlertTest {
         assertFalse(UpdateChecker.isNewer(99, 100))
     }
 
+    @Test fun apkUrlPrefersAbsoluteAndFallsBackToLatestRelease() {
+        val fallback = "https://github.com/uzairbukhari/home-automation/releases/latest/download/photon.apk"
+        assertEquals("https://example.com/a.apk", UpdateChecker.apkUrlFor(VersionInfo(101, apk = "https://example.com/a.apk")))
+        assertEquals(fallback, UpdateChecker.apkUrlFor(VersionInfo(101)))
+        assertEquals(fallback, UpdateChecker.apkUrlFor(VersionInfo(101, apk = "/app/photon.apk")))
+    }
+
     @Test fun versionFileParses() {
         val info = AppJson.decodeFromString<VersionInfo>("""{"versionCode":120,"versionName":"2.0.120","apk":"/app/photon.apk","extra":1}""")
         assertEquals(120, info.versionCode)
@@ -191,5 +201,32 @@ class UpdateAndAlertTest {
         assertEquals(60_000L, nextPollDelayMs(now - 290_000, now)) // due in 30 s, clamped up
         assertEquals(200_000L, nextPollDelayMs(now - 120_000, now) )
         assertEquals(60_000L, nextPollDelayMs(now - 3_600_000, now)) // stale: keep checking each minute
+    }
+}
+
+class OverviewCardsTest {
+    @Test fun selfSufficiencyIsClampedAndNeedsHomeUse() {
+        assertEquals(75, selfSufficiency(10.0, 2.5))
+        assertEquals(0, selfSufficiency(10.0, 12.0))
+        assertEquals(100, selfSufficiency(10.0, -1.0))
+        assertNull(selfSufficiency(0.0, 1.0))
+        assertNull(selfSufficiency(10.0, null))
+    }
+
+    @Test fun durationReadsNaturally() {
+        assertEquals("2 h 15 min", duration(2.25))
+        assertEquals("3 h", duration(3.0))
+        assertEquals("30 min", duration(0.5))
+        assertEquals("over a day", duration(30.0))
+        assertNull(duration(0.0))
+    }
+
+    @Test fun batteryStatusFollowsTheWebRules() {
+        assertEquals("No reading", batteryStatus(null, 0.0, true, 5.2, 39.0))
+        assertEquals("Last recorded level", batteryStatus(60.0, 500.0, false, 5.2, 39.0))
+        assertEquals("Resting", batteryStatus(60.0, 20.0, true, 5.2, 39.0))
+        assertEquals("Charging 1.00 kW · full in 2 h 5 min", batteryStatus(60.0, 1000.0, true, 5.2, 39.0))
+        assertTrue(batteryStatus(60.0, -1000.0, true, 5.2, 39.0).startsWith("Discharging 1.00 kW · "))
+        assertEquals("Below reserve · discharging 0.50 kW", batteryStatus(30.0, -500.0, true, 5.2, 39.0))
     }
 }
