@@ -127,6 +127,7 @@ export const EnergyScene = memo(function EnergyScene({ snapshot, capacity }: { s
     ['Grid → Home', routes.gridHome, 'var(--flow-grid-import)', ['grid', 'home']],
     ['Grid → Battery', routes.gridBattery, 'var(--flow-grid-import)', ['grid', 'battery']],
   ];
+  const mix: [string, number, string][] = [['Solar', routes.solarHome, 'var(--flow-solar)'], ['Battery', routes.batteryHome, 'var(--flow-discharge)'], ['Grid', routes.gridHome, 'var(--flow-grid-import)']];
   const shownRows = selected ? rows.filter(r => r[3].includes(selected)) : rows, max = Math.max(500, ...rows.map(r => r[1]));
 
   return (
@@ -153,6 +154,15 @@ export const EnergyScene = memo(function EnergyScene({ snapshot, capacity }: { s
         {shownRows.map(([name, w, color]) => (
           <div className="scene-row" key={name}><span>{name}</span><output>{kw(w)} kW</output><div className="track"><span className="fill" style={{ width: `${(w / max) * 100}%`, background: color }} /></div></div>
         ))}
+        <div className="scene-mix">
+          <span className="mix-title">Home is powered by</span>
+          {snapshot.home > ACTIVE_W ? <>
+            <div className="mix-bar" role="img" aria-label={mix.map(([n, w]) => `${n} ${Math.round((w / snapshot.home) * 100)} percent`).join(', ')}>
+              {mix.map(([n, w, color]) => w > 0 && <span key={n} style={{ width: `${(w / snapshot.home) * 100}%`, background: color }} />)}
+            </div>
+            <div className="mix-legend">{mix.map(([n, w, color]) => <span key={n}><i style={{ background: color }} />{n} {Math.round((w / snapshot.home) * 100)}%</span>)}</div>
+          </> : <span className="mix-idle">Home is idle</span>}
+        </div>
       </div>
     </div>
   );
