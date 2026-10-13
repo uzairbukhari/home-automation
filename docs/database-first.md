@@ -6,7 +6,7 @@ Normal dashboard, device, connection, history, report, export and automation pre
 
 Use exactly one external collection job (five minutes until quota and scheduler acceleration are verified): `POST /api/mobile/collect`, authenticated with the existing collection secret. Do not also schedule the individual provider endpoints; they delegate to the same coordinator. D1 leases coordinate workers and browser refreshes. Explicit provider refresh has a shared one-minute cooldown and cannot bypass a running lease. History advances only after persistence, at most one provider day/page per collection.
 
-The external scheduler must be activated and verified separately. Sites scheduling has an hourly minimum. Rules start disabled; confirm repeated successful five-minute collection in Settings → Storage before enabling a rule. A recent manual refresh alone does not prove the scheduler is active.
+The external scheduler must be activated and verified separately. The hosting platform's own scheduler is not used. Rules start disabled; confirm repeated successful five-minute collection in Settings → Storage before enabling a rule. A recent manual refresh alone does not prove the scheduler is active.
 
 ## Retention and migration
 

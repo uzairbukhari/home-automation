@@ -4,7 +4,7 @@ This guide describes the coordinated actual-energy upgrade. Deployment evidence 
 
 ## Architecture and access
 
-Photon serves one household and its configured owner through Sites, a Cloudflare-compatible Vinext/React worker and D1. Public hosting does not grant data access: the root layout and data APIs use getOwnerUser; mutations also enforce same origin. Existing authentication, credentials, Android wrapper, notification delivery, rooms, preferences and favorites remain in place.
+Photon serves one household and its configured owner as a Next.js/React app on Vercel with Turso (libSQL) storage. Public hosting does not grant data access: the root layout and data APIs use getOwnerUser; mutations also enforce same origin. Existing authentication, credentials, Android wrapper, notification delivery, rooms, preferences and favorites remain in place.
 
 ```mermaid
 flowchart LR
@@ -12,7 +12,7 @@ flowchart LR
   Coordinator --> Leases[Per-provider durable leases]
   Leases --> Tuya[Tuya adapter]
   Leases --> Dess[DessMonitor adapter]
-  Tuya --> D1[(D1 latest and history)]
+  Tuya --> D1[(Turso latest and history)]
   Dess --> D1
   D1 --> Rules[Rule evaluator]
   Rules --> Ledger[Durable episode and command ledger]
@@ -48,7 +48,7 @@ Ordinary GETs, exports and rule previews read saved data, never trigger provider
 - POST /api/devices/tuya/:id/command accepts code/value and returns command ID, requested state and durable delivery status. Fresh confirmation is saved into latest state; accepted is not the same as confirmed.
 - POST /api/devices/refresh performs an optional budget-gated foreground refresh, sharing the collector lease. It returns scheduled when acceleration is unavailable.
 - GET /api/automations/activity supports rule, status, from, to and cursor. Pages contain at most 50 records; dates use Pakistan-local midnight, IDs provide stable descending pagination.
-- Existing /api/tuya routes retain their compatibility services. /api/solar/latest, /history and /reports use D1; reports preserve selected historical years.
+- Existing /api/tuya routes retain their compatibility services. /api/solar/latest, /history and /reports use the database; reports preserve selected historical years.
 - POST /api/mobile/collect remains the single authenticated external scheduler target. Preserve its existing collection-secret header; do not put secrets in URLs.
 
 ## Cadence and request budget
@@ -108,4 +108,4 @@ For a populated rules database, migration 0009 records the prior global pause st
 
 Verify the deployment version and migration tables, then inspect app_jobs, connection_state, collection runs, automation_activity and period_coverage across at least three scheduled cycles. Physical validation requires a specifically approved test device; automated regression tests use fake devices. Production browser access, a reference-phone timing baseline, exact quota entitlement and historical completeness are separate evidence gates.
 
-If rollback is required, pause rules, redeploy the prior verified Sites version, keep additive tables and backups, and reconcile pending command records before resuming. Never replay uncertain commands or restore old episode state over newly completed actions. Restore a summary snapshot only after reviewing its date/source and retaining the newer record.
+If rollback is required, pause rules, redeploy the prior verified Vercel deployment, keep additive tables and backups, and reconcile pending command records before resuming. Never replay uncertain commands or restore old episode state over newly completed actions. Restore a summary snapshot only after reviewing its date/source and retaining the newer record.

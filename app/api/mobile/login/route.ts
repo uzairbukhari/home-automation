@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { env } from '@/lib/env';
 import { loginLocked, recordLoginFailure } from '@/lib/login-throttle';
 import { SESSION_DAYS, signSession, verifyPassword } from '@/lib/session';
 

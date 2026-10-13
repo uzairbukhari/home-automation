@@ -58,7 +58,7 @@ class ApiClient(private val session: Session) {
     }
 
     suspend fun login(server: String, password: String) {
-        val base = normalizeServerUrl(server) ?: throw ApiException(0, "Enter your server address, for example home.example.workers.dev.")
+        val base = normalizeServerUrl(server) ?: throw ApiException(0, "Enter your server address, for example your-app.vercel.app.")
         val body = buildJsonObject { put("password", password) }.toString()
         val request = Request.Builder()
             .url("$base/api/mobile/login")

@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { env } from '@/lib/env';
 import { cookies, headers } from "next/headers";
 import { SESSION_COOKIE, bearerToken, verifySession } from "@/lib/session";
 

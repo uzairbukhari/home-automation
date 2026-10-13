@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { env } from '@/lib/env';
 import { providerFetch } from '../jobs';
 import type { MonitoringProvider, ProviderStatus, Reading } from './types';
 import { finiteNumber, localDate, localTime, normalizeMeasurement, shiftDate, validDate } from '../measurements';

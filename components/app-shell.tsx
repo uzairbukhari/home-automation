@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useState,type ReactNode,type ComponentProps} from 'react';
-// Use the public router directly: this Vinext build loses the private exports
+// Use the public router directly: this build loses the private exports
 // loaded dynamically by next/link in production (navigation and prefetch).
 export function OfflineLink({href,onClick,...props}:ComponentProps<'a'>){
  const router=useRouter();

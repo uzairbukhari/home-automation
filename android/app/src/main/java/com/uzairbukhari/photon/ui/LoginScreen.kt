@@ -98,7 +98,7 @@ fun LoginScreen(model: LoginViewModel) {
             value = server,
             onValueChange = { server = it },
             label = { Text("Server address") },
-            placeholder = { Text("home-dashboard.you.workers.dev") },
+            placeholder = { Text("your-app.vercel.app") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth(),

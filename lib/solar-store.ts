@@ -6,7 +6,7 @@ import { localDate, shiftDate } from './measurements';
 import { summarizeSolarDay } from './telemetry';
 
 function db(){if(!appDb())throw new Error('Solar history storage is unavailable');return appDb();}
-async function batch(statements:D1PreparedStatement[]){for(let i=0;i<statements.length;i+=80)await db().batch(statements.slice(i,i+80));}
+async function batch(statements:DbStatement[]){for(let i=0;i<statements.length;i+=80)await db().batch(statements.slice(i,i+80));}
 // Only rows that are new or changed are written: a five-minute collection re-reads the whole day
 // from DessMonitor, and rewriting identical rows is what exhausted the free write allowance.
 export async function saveSamples(entityId:string,points:SolarPoint[]){

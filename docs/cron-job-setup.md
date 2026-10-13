@@ -1,9 +1,9 @@
 # Five-minute Photon checks on cron-job.org
 
-The Sites scheduler rejected five-minute runs because its minimum interval is hourly. No hourly substitute was created. The deployed collector has been verified with both providers and alert evaluation. The existing external job is active: production database records confirmed recurring five-minute collection on 2026-10-06, including the first version 35 collection at 06:30 UTC. Retain that job; the steps below are for recovery or replacement, not creating a duplicate. Provider acceleration remains disabled until actual entitlement is verified.
+The earlier hosting scheduler rejected five-minute runs because its minimum interval is hourly. No hourly substitute was created. The deployed collector has been verified with both providers and alert evaluation. The existing external job is active: production database records confirmed recurring five-minute collection on 2026-10-06, including the first version 35 collection at 06:30 UTC. Retain that job; the steps below are for recovery or replacement, not creating a duplicate. Provider acceleration remains disabled until actual entitlement is verified.
 
 1. Sign in at https://console.cron-job.org and create a job called **Photon collection and alerts**.
-2. Use URL `https://<your-worker-address>.workers.dev/api/mobile/collect`.
+2. Use URL `https://<your-project>.vercel.app/api/mobile/collect`.
 3. Set the schedule to every **5 minutes**, timezone **Asia/Karachi**. Keep it enabled.
 4. In advanced settings select **POST**, with an empty body. Add header **x-collection-secret** using the value from the private local file `outputs/android/cron-job-setup.private.json`. Do not put the secret in the URL. The public hosting layer needs no extra bearer header; the endpoint checks its own server secret.
 5. Leave response saving disabled. Enable failed-run, recovery and automatic-disable notices if you want scheduler health messages. Use the available 30-second timeout, then run the test execution.

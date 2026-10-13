@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { env } from '@/lib/env';
 import { runCollection } from '@/lib/collection';
 // Hosts that cap function time (Vercel) get the full minute a collection can need.
 export const maxDuration = 60;

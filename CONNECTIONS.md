@@ -42,7 +42,7 @@ Billing day is user configurable; the local owner's setting is now **27**. The c
 
 ## Solar collection rollout
 
-Apply additive migrations `0003`, `0004`, and `0005` to the deployed D1 database before deploying the updated application. These add favorites, solar history/periods, resumable collection state, rooms, and tariff provenance. They preserve existing settings and Tuya raw history. Local migrations have been applied; no hosted database or scheduler was changed.
+Apply additive migrations `0003`, `0004`, and `0005` to the Turso database (`node scripts/turso.mjs migrate` does this) before deploying the updated application. These add favorites, solar history/periods, resumable collection state, rooms, and tariff provenance. They preserve existing settings and Tuya raw history. Local migrations have been applied; no hosted database or scheduler was changed.
 
 After deployment, configure `SOLAR_COLLECTION_SECRET` as a private runtime secret (the existing `CRON_SECRET` is accepted for compatibility). A scheduler should POST `/api/solar/collect` every five minutes with the `x-collection-secret` header or Bearer authorization. Keep this secret out of URLs and browsers. Scheduling remains a separate rollout step.
 

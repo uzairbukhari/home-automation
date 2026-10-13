@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { env } from '@/lib/env';
 
 function toBytes(value:string){
   const binary=atob(value);
