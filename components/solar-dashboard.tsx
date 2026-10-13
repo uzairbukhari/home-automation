@@ -43,6 +43,7 @@ import { EventsPanel } from './events-panel';
 import { EnergyBalance } from './energy/energy-balance';
 import { SolarCalendar } from './energy/solar-calendar';
 import { HourHeatmap } from './energy/hour-heatmap';
+import { GridHealth } from './energy/grid-health';
 import { SelfSufficiencyTrend } from './energy/self-sufficiency';
 import { BestWorstDays } from './energy/best-worst-days';
 import type { ReportsSnapshot } from '@/lib/solar-types';
@@ -1131,6 +1132,7 @@ export function SolarDashboard({ live, settings, pin }: { live: DessSnapshot | n
         )}
         {tab === 'grid' && (
           <>
+            <GridHealth />
             <EnergyDetail key="grid" embedded entity="grid" onClose={() => undefined} live={live} settings={settings} />
             <EventsPanel />
           </>
