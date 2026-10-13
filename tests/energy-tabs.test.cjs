@@ -358,3 +358,103 @@ test('heatmap route averages stored hourly power per day and the reports route r
     sqlite.close();
   }
 });
+
+// Grid health: outage detection, voltage bands and the stored rollup.
+const gridDate = '2026-03-10';
+const gridAt = (hh, mm) =>
+  Date.parse(`${gridDate}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+05:00`);
+const gridPoint = (hh, mm, voltage, homeW = 500) => ({
+  stamp: gridAt(hh, mm),
+  voltage,
+  frequency: voltage > 100 ? 50 : 0,
+  homeW,
+});
+test('summarizeGrid finds outages, battery-carried energy and voltage bands', () => {
+  const { summarizeGrid, gridTotals, gridVerdict } = require('../lib/grid-math.ts');
+  const pts = [
+    gridPoint(10, 0, 230),
+    gridPoint(10, 5, 230),
+    gridPoint(10, 10, 0, 1200),
+    gridPoint(10, 15, 0, 1200),
+    gridPoint(10, 20, 0, 1200),
+    gridPoint(10, 25, 175),
+    gridPoint(10, 30, 250),
+    gridPoint(10, 35, 230),
+    gridPoint(18, 0, 0, 600),
+    gridPoint(18, 5, 231),
+  ];
+  const day = summarizeGrid(pts, gridDate);
+  assert.equal(day.outages.length, 2);
+  assert.equal(day.outages[0].minutes, 15);
+  assert.equal(day.outages[1].minutes, 5);
+  assert.equal(day.downMinutes, 20);
+  assert.ok(Math.abs(day.outages[0].homeKwh - 0.3) < 1e-9);
+  assert.ok(Math.abs(day.carriedKwh - 0.35) < 1e-9);
+  assert.equal(day.voltage.min, 175);
+  assert.equal(day.voltage.max, 250);
+  assert.ok(day.bandHours.critical > 0 && day.bandHours.high > 0 && day.bandHours.normal > 0);
+  assert.deepEqual(day.frequency, { min: 50, max: 50 });
+  const totals = gridTotals([day]);
+  assert.equal(totals.outages, 2);
+  assert.equal(totals.longest.minutes, 15);
+  assert.ok(gridVerdict(totals, 30).includes('2 power cuts'));
+  assert.ok(
+    gridVerdict(gridTotals([summarizeGrid([gridPoint(1, 0, 230), gridPoint(1, 5, 230)], gridDate)]), 7).includes(
+      'No power cuts',
+    ),
+  );
+  assert.equal(gridVerdict(gridTotals([]), 7), null);
+  assert.equal(summarizeGrid([], gridDate).outages.length, 0);
+});
+test('grid rollup is stored from raw fields and served by the owner-only route', async () => {
+  const { database, auth } = require('./helpers.cjs'),
+    { sqlite } = database(),
+    oldUser = auth.user;
+  const { saveSnapshot } = require('../lib/solar-store.ts'),
+    { gridRollupStep, gridDays } = require('../lib/grid-stats.ts'),
+    { localDate, shiftDate } = require('../lib/measurements.ts');
+  const day = shiftDate(localDate(), -3),
+    at = (hh, mm) =>
+      new Date(`${day}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+05:00`).toISOString(),
+    field = (voltage) => ({
+      'grid voltage': { value: String(voltage), unit: 'V' },
+      'frequency of grid': { value: voltage ? '50' : '0', unit: 'Hz' },
+      'output active power': { value: '0.8', unit: 'kW' },
+    });
+  auth.user = { userId: 'grid-fixture' };
+  try {
+    await saveSnapshot({
+      device: { serial: 'grid-fixture', name: 'Fixture', collector: 'test', mode: 'Battery mode' },
+      updatedAt: new Date().toISOString(),
+      readings: [{ metric: 'battery_soc', value: 50, quality: 'good' }],
+      series: [],
+      rawFields: [
+        { sourceTimestamp: at(9, 0), fields: field(228) },
+        { sourceTimestamp: at(9, 5), fields: field(0) },
+        { sourceTimestamp: at(9, 10), fields: field(0) },
+        { sourceTimestamp: at(9, 15), fields: field(229) },
+      ],
+    });
+    const step = await gridRollupStep('grid-fixture');
+    assert.ok(step.done.includes(day));
+    const stored = await gridDays('grid-fixture', day, day);
+    assert.equal(stored.length, 1);
+    assert.equal(stored[0].outages.length, 1);
+    assert.equal(stored[0].downMinutes, 10);
+    assert.ok(Math.abs(stored[0].carriedKwh - 0.8 * (10 / 60)) < 1e-9);
+    const response = await require('../app/api/solar/grid/route.ts').GET(
+      new Request('http://localhost/api/solar/grid?days=7'),
+    );
+    const body = await response.json();
+    assert.equal(body.days.length, 1);
+    assert.equal(body.days[0].date, day);
+    auth.user = null;
+    assert.equal(
+      (await require('../app/api/solar/grid/route.ts').GET(new Request('http://localhost/api/solar/grid'))).status,
+      401,
+    );
+  } finally {
+    auth.user = oldUser;
+    sqlite.close();
+  }
+});
