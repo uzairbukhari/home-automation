@@ -569,3 +569,43 @@ test('cost insights project the bill, find the slab edge, baseload and yield per
   assert.ok(yieldVerdict(points).includes('best 5.0'));
   assert.equal(yieldVerdict(points.slice(0, 2)), null);
 });
+
+test('money split ranks appliances by cost and adds the unmonitored remainder', () => {
+  const { moneySplit } = require('../lib/costs.ts');
+  const { rows, total, rate } = moneySplit(
+    [
+      { id: 'ac', name: 'AC', energyKwh: 60, estimatedCost: 2400 },
+      { id: 'fridge', name: 'Fridge', energyKwh: 30, estimatedCost: 1200 },
+      { id: 'meter', name: 'Main meter', energyKwh: 400, estimatedCost: 16000, upstream: true },
+      { id: 'none', name: 'No data', energyKwh: null, estimatedCost: null },
+    ],
+    30,
+  );
+  assert.equal(rate, 40);
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    ['ac', 'fridge', 'unmonitored'].sort(
+      (a, b) => rows.findIndex((r) => r.id === a) - rows.findIndex((r) => r.id === b),
+    ),
+  );
+  assert.equal(rows[0].id, 'ac');
+  assert.equal(rows.at(-1).unmonitored, true);
+  assert.equal(total, 4800);
+  assert.ok(Math.abs(rows.reduce((n, r) => n + r.share, 0) - 1) < 1e-9);
+  assert.equal(moneySplit([], 5).rows.length, 0);
+});
+test('summarizeGrid records inverter load and temperature when present', () => {
+  const { summarizeGrid } = require('../lib/grid-math.ts');
+  const day = summarizeGrid(
+    [
+      { ...gridPoint(12, 0, 230), loadPct: 85, tempC: 41 },
+      { ...gridPoint(12, 5, 230), loadPct: 40, tempC: 45 },
+      { ...gridPoint(12, 10, 230), loadPct: 90, tempC: 43 },
+    ],
+    gridDate,
+  );
+  assert.equal(day.inverter.peakLoadPct, 90);
+  assert.ok(Math.abs(day.inverter.hoursAbove80 - 10 / 60) < 1e-9);
+  assert.equal(day.inverter.maxTempC, 45);
+  assert.equal(summarizeGrid([gridPoint(12, 0, 230)], gridDate).inverter, undefined);
+});

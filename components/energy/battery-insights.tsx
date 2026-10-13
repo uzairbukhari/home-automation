@@ -17,6 +17,7 @@ import { ChartCard } from './chart-card';
 import { RangePicker } from './range-picker';
 import { SERIES, chartTick, chartTooltip, tooltipTrigger } from '@/lib/chart-theme';
 import { readJson } from '@/lib/client-data';
+import type { GridDay } from '@/lib/grid-math';
 import { batteryInsightVerdict, fullDays, reserveHits, roundTrip, socBins, type SocDay } from '@/lib/battery-insights';
 
 const SPANS = [
@@ -162,5 +163,78 @@ export function BatteryInsights({
         </div>
       </ChartCard>
     </>
+  );
+}
+
+/** How hard the inverter works: peak load, time above 80% load and how hot it runs. */
+export function InverterStrain() {
+  const [days, setDays] = useState<GridDay[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    readJson<{ days: GridDay[] }>('/api/solar/grid?days=30')
+      .then((data) => active && setDays(data.days))
+      .catch(() => active && setDays([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+  const rows = (days ?? []).flatMap((d) => (d.inverter ? [{ date: d.date, ...d.inverter }] : []));
+  if (!rows.length) return null;
+  const peak = Math.max(0, ...rows.map((r) => r.peakLoadPct ?? 0)),
+    hours = rows.reduce((n, r) => n + r.hoursAbove80, 0),
+    temps = rows.flatMap((r) => (r.maxTempC === null ? [] : [r.maxTempC])),
+    hottest = temps.length ? Math.max(...temps) : null,
+    chart = rows.map((r) => ({ date: r.date, load: r.peakLoadPct, temp: r.maxTempC }));
+  return (
+    <ChartCard
+      eyebrow="Inverter"
+      title="Load and temperature"
+      verdict={
+        hours >= 1
+          ? `The inverter ran above 80% load for ${hours.toFixed(1)} hours in the last ${rows.length} days (peak ${Math.round(peak)}%). Sustained high load is a reason to move heavy appliances to sunny hours.`
+          : `The inverter stayed comfortably loaded: peak ${Math.round(peak)}% over the last ${rows.length} days${hottest === null ? '' : `, hottest ${Math.round(hottest)}°C`}.`
+      }
+      footnote="Peak load and temperature each day, from the inverter's own readings."
+    >
+      <div className="main-chart">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chart} margin={{ left: 0, right: 12, top: 12 }}>
+            <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 7" />
+            <XAxis dataKey="date" tickFormatter={dateLabel} minTickGap={24} tick={chartTick} />
+            <YAxis yAxisId="l" unit="%" width={46} domain={[0, 100]} tick={chartTick} />
+            <YAxis yAxisId="t" orientation="right" unit="°" width={44} tick={chartTick} />
+            <ReferenceLine yAxisId="l" y={80} stroke="var(--status-warn)" strokeDasharray="6 6" />
+            <Tooltip
+              trigger={tooltipTrigger()}
+              labelFormatter={(d) => dateLabel(String(d))}
+              formatter={(n, name) =>
+                name === 'Temperature' ? `${Math.round(Number(n))}°C` : `${Math.round(Number(n))}%`
+              }
+              contentStyle={chartTooltip}
+            />
+            <Line
+              yAxisId="l"
+              name="Peak load"
+              dataKey="load"
+              stroke={SERIES.home}
+              strokeWidth={2.5}
+              dot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+            <Line
+              yAxisId="t"
+              name="Temperature"
+              dataKey="temp"
+              stroke={SERIES.discharge}
+              strokeWidth={1.5}
+              dot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartCard>
   );
 }
