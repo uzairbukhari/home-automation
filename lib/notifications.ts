@@ -2,7 +2,7 @@ import { appDb } from './db';
 import { env } from '@/lib/env';
 import { cachedDevices } from './tuya-store';
 import { savedSettings } from './settings-store';
-import { transition,validateRules,type AlertRule,type AlertState,type AlertObservation } from './notification-types';
+import { transition,validateRules,DEFAULT_RULES,SUSTAIN_MS,COOLDOWN_MS,type AlertRule,type AlertState,type AlertObservation } from './notification-types';
 import type { DessSnapshot } from './providers/dessmonitor';
 import type { TuyaDashboardDevice } from './providers/tuya';
 import { decodeTuya } from './tuya-format';
@@ -51,6 +51,11 @@ async function observations(now:Date){
 }
 export function observe(rule:AlertRule,solar:DessSnapshot|null,devices:TuyaDashboardDevice[],reserve:number,now:Date):AlertObservation|null {
   if(rule.kind==='stale_solar')return {value:solar?.updatedAt??null,timestamp:now.toISOString(),active:!solar||now.getTime()-Date.parse(solar.updatedAt)>(Number(rule.threshold??15)*60000)};
+  if(rule.kind==='high_load'){
+    const reading=solar?.readings.find(r=>r.metric==='home_power');
+    if(reading?.value==null||reading.quality==='missing'||now.getTime()-Date.parse(reading.sourceTimestamp)>15*60000)return null;
+    const kw=Math.round(reading.value/10)/100;return {value:kw,timestamp:reading.sourceTimestamp,active:kw>Number(rule.threshold??2.5)};
+  }
   if(rule.kind==='low_battery'){
     const reading=solar?.readings.find(r=>r.metric==='battery_soc');
     if(reading?.value==null||reading.quality==='missing'||now.getTime()-Date.parse(reading.sourceTimestamp)>15*60000)return null;
@@ -71,8 +76,14 @@ export function observe(rule:AlertRule,solar:DessSnapshot|null,devices:TuyaDashb
 function message(rule:AlertRule,observation:AlertObservation,recovered:boolean,devices:TuyaDashboardDevice[]){
   const name=devices.find(d=>d.id===rule.deviceId)?.name??'Device';
   const title=recovered?'Photon · recovered':'Photon · alert';
-  const body=rule.kind==='low_battery'?`Battery ${observation.value}%${recovered?' · above reserve again':''}`:rule.kind==='stale_solar'?recovered?'Solar readings are updating again.':'Solar readings are overdue.':rule.kind==='device_offline'?`${name} is ${recovered?'online again':'offline'}.`:`${name} · ${rule.code}: ${String(observation.value)}${recovered?' · condition cleared':''}`;
+  const body=rule.kind==='high_load'?`Home load ${observation.value} kW${recovered?' · back below the limit':' is above your limit'}`:rule.kind==='low_battery'?`Battery ${observation.value}%${recovered?' · above reserve again':''}`:rule.kind==='stale_solar'?recovered?'Solar readings are updating again.':'Solar readings are overdue.':rule.kind==='device_offline'?`${name} is ${recovered?'online again':'offline'}.`:`${name} · ${rule.code}: ${String(observation.value)}${recovered?' · condition cleared':''}`;
   return {title,body,url:rule.deviceId?`/devices?device=${encodeURIComponent(rule.deviceId)}`:'/solar'};
+}
+async function seedDefaults(){
+  const userId=(env as unknown as {OWNER_USER_ID?:string}).OWNER_USER_ID;if(!userId)return;
+  const db=notificationDb();
+  // Only adds what is missing, so choices already saved in Settings stay as they are.
+  await db.batch(DEFAULT_RULES.map(r=>db.prepare('INSERT OR IGNORE INTO notification_rules(user_id,id,config) VALUES (?,?,?)').bind(userId,r.id,JSON.stringify(r))));
 }
 export async function evaluateAlerts(now=new Date()){
   const db=notificationDb(),token=crypto.randomUUID(),stamp=now.toISOString();
@@ -81,13 +92,26 @@ export async function evaluateAlerts(now=new Date()){
   if(!lease)return {status:'already_running',events:0};
   let events=0;
   try {
-    await ensureAppAlerts();
+    await ensureAppAlerts();await seedDefaults();
     const {solar,devices}=await observations(now),rows=await db.prepare('SELECT user_id,config FROM notification_rules ORDER BY user_id,id LIMIT 101').all<{user_id:string;config:string}>();
     for(const row of rows.results){
       const rule=JSON.parse(row.config) as AlertRule;if(!rule.enabled)continue;
       const reserve=(await savedSettings(row.user_id)).threshold,observation=observe(rule,solar,devices,reserve,now);if(!observation)continue;
       const old=await db.prepare('SELECT state FROM notification_state WHERE user_id=? AND rule_id=?').bind(row.user_id,rule.id).first<{state:string}>();
-      const update=transition(old?JSON.parse(old.state) as AlertState:null,observation,rule);if(!update)continue;
+      const previous=old?JSON.parse(old.state) as AlertState:null;
+      const first=transition(previous,observation,rule);if(!first)continue;
+      let update:{state:AlertState;event:boolean;recovered:boolean}=first;
+      if(rule.kind==='high_load'||rule.kind==='low_battery'){
+        const armed=previous?.armedAt?Date.parse(previous.armedAt):null;
+        // High load must persist across collections; a one-off spike should not buzz the phone.
+        if(rule.kind==='high_load'&&observation.active&&!previous?.active&&(armed===null||now.getTime()-armed<SUSTAIN_MS)){
+          update={state:{...(previous??{value:observation.value,timestamp:observation.timestamp,sequence:0}),active:false,value:observation.value,timestamp:observation.timestamp,armedAt:previous?.armedAt??stamp},event:false,recovered:false};
+        } else {
+          const lastEvent=previous?.lastEventAt?Date.parse(previous.lastEventAt):0;
+          if(update.event&&now.getTime()-lastEvent<COOLDOWN_MS)update={...update,event:false};
+          update.state={...update.state,armedAt:undefined,lastEventAt:update.event?stamp:previous?.lastEventAt};
+        }
+      }
       const statements=[db.prepare('INSERT INTO notification_state(user_id,rule_id,state) VALUES (?,?,?) ON CONFLICT(user_id,rule_id) DO UPDATE SET state=excluded.state').bind(row.user_id,rule.id,JSON.stringify(update.state))];
       if(update.event){
         const eventId=`${row.user_id}:${rule.id}:${update.state.sequence}:${observation.timestamp}`;

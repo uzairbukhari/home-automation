@@ -75,3 +75,11 @@ test('Offline writes are rejected without a queue; authentication and credential
   assert.equal(await w.fetch('/api/provider-credentials'),undefined);assert.equal(await w.fetch('/api/mobile/session'),undefined);assert.equal(await w.fetch('/signin-with-chatgpt'),undefined);
   await w.message({type:'CLEAR_PRIVATE'});assert.equal(await vm.runInContext('account()',w.context),null);
 });
+test('High home load compares kW against the limit and defaults to 2.5 kW',()=>{
+  const load=w=>({readings:[{metric:'home_power',value:w,quality:'good',sourceTimestamp:now.toISOString()}],updatedAt:now.toISOString()});
+  const high={id:'high-load',kind:'high_load',enabled:true,recovery:false,threshold:null};
+  assert.equal(observe(high,load(2600),[],39,now).active,true);
+  assert.equal(observe(high,load(2400),[],39,now).active,false);
+  assert.equal(observe({...high,threshold:3},load(2600),[],39,now).active,false);
+  assert.equal(observe(high,load(2600),[],39,new Date('2026-10-03T11:00:00Z')),null);
+});

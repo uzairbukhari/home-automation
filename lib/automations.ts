@@ -3,6 +3,7 @@ import { database, claimJob, finishJob } from './jobs';
 import { cachedDevices } from './tuya-store';
 import { cachedSnapshot } from './solar-store';
 import { executeCommand } from './commands';
+import { appAlertStatement, ensureAppAlerts } from './app-alerts';
 import { observeConditions, type AutomationRule, type RuleState, type Action } from './automation-types';
 export async function automationSnapshot(userId:string){const db=database(),rules=await db.prepare('SELECT r.config,s.data FROM automation_rules r LEFT JOIN automation_state s ON r.id=s.rule_id WHERE user_id=? ORDER BY r.updated_at DESC').bind(userId).all<{config:string;data:string|null}>(),runs=(await db.prepare('SELECT a.* FROM automation_runs a JOIN automation_rules r ON a.rule_id=r.id WHERE r.user_id=? ORDER BY started_at DESC LIMIT 100').bind(userId).all<{id:string;rule_id:string;started_at:string;status:string;reason:string|null;inputs:string}>()).results,actions=(await db.prepare('SELECT a.*,l.device_id,l.code FROM automation_actions a LEFT JOIN tuya_command_log l ON a.command_id=l.id WHERE a.run_id IN (SELECT a.id FROM automation_runs a JOIN automation_rules r ON a.rule_id=r.id WHERE r.user_id=? ORDER BY started_at DESC LIMIT 100)').bind(userId).all<{run_id:string;action_index:number;status:string;error:string|null;device_id:string|null;code:string|null}>()).results;return{rules:rules.results.map(r=>({rule:JSON.parse(r.config) as AutomationRule,state:r.data?JSON.parse(r.data):null})),paused:Boolean((await db.prepare("SELECT paused FROM automation_control WHERE id='global'").first<{paused:number}>())?.paused),runs:runs.map(r=>({...r,actions:actions.filter(a=>a.run_id===r.id)}))};}
 export async function evaluateAutomations(now=new Date()){
@@ -33,9 +34,21 @@ export async function evaluateAutomations(now=new Date()){
       await db.batch([...(activity?[activity]:[]),db.prepare('UPDATE automation_state SET data=? WHERE rule_id=?').bind(JSON.stringify(state),rule.id),db.prepare("INSERT INTO automation_runs(id,rule_id,started_at,status,inputs) VALUES (?,?,?,'executing',?)").bind(runId,rule.id,now.toISOString(),JSON.stringify(inputs)),...actions.map((_,index)=>db.prepare("INSERT INTO automation_actions(run_id,action_index,status) VALUES (?,?,'pending')").bind(runId,index))]);
       for(let index=0;index<actions.length;index++){const action=actions[index];try{const result=await executeCommand(action.deviceId,action.code,action.value,{origin:'automation',runId,devices});await db.prepare('UPDATE automation_actions SET command_id=?,status=?,error=? WHERE run_id=? AND action_index=?').bind(result.commandId,result.status,result.error??null,runId,index).run();}catch(error){await db.prepare("UPDATE automation_actions SET status='failed',error=? WHERE run_id=? AND action_index=?").bind(String(error),runId,index).run();await db.prepare("INSERT INTO automation_activity(rule_id,run_id,occurred_at,status,reason,inputs,rule_snapshot) VALUES (?,?,?,'failed',?,?,?)").bind(rule.id,runId,new Date().toISOString(),'Action could not be delivered; check device availability and supported controls.',JSON.stringify(inputs),JSON.stringify(rule)).run();}}
       await db.prepare("UPDATE automation_runs SET status='pending' WHERE id=?").bind(runId).run();executed++;
+      await announceRun(rule,recovery,actions,devices,runId,now);
     }
     return{status:globallyPaused?'paused':'completed',executed,evaluated:rows.results.length};
   }catch(error){await finishJob(job,String(error),now);throw error;}finally{await finishJob(job,undefined,now);}
+}
+/** Tells the app a rule changed a device. Never lets a notification problem undo or hide the command. */
+async function announceRun(rule:AutomationRule,recovery:boolean,actions:Action[],devices:Array<{id:string;name:string}>,runId:string,now:Date){
+  try{
+    const db=database(),owner=await db.prepare('SELECT user_id FROM automation_rules WHERE id=?').bind(rule.id).first<{user_id:string}>();if(!owner)return;
+    const pref=await db.prepare("SELECT config FROM notification_rules WHERE user_id=? AND id='rule-ran'").bind(owner.user_id).first<{config:string}>();
+    if(pref&&!(JSON.parse(pref.config) as {enabled:boolean}).enabled)return;
+    const what=actions.map(a=>`${devices.find(d=>d.id===a.deviceId)?.name??'Device'} · ${a.code.replace(/_/g,' ')} → ${typeof a.value==='boolean'?(a.value?'on':'off'):String(a.value)}`).join(', ');
+    await ensureAppAlerts();
+    await appAlertStatement(owner.user_id,{eventId:`rule:${runId}`,title:recovery?'Photon · rule recovered':'Photon · rule ran',body:`${rule.name}: ${what}`,url:'/automations'},now.toISOString()).run();
+  }catch{/* The activity log already records the run. */}
 }
 export async function simulateRule(rule:AutomationRule){
   const [solar,devices]=await Promise.all([cachedSnapshot(true,false),cachedDevices(true)]);return{...observeConditions(rule.conditions,rule.logic,solar,devices),recovery:rule.recovery?observeConditions(rule.recovery.conditions,'all',solar,devices):null,actions:rule.actions,note:'Preview only. No commands sent.'};

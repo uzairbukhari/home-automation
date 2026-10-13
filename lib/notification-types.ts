@@ -1,8 +1,10 @@
 import type { TuyaDashboardDevice } from './providers/tuya';
-export type AlertKind='low_battery'|'stale_solar'|'device_offline'|'switch_change'|'sensor';
+export type AlertKind='low_battery'|'stale_solar'|'device_offline'|'switch_change'|'sensor'|'high_load'|'rule_ran';
 export type AlertRule={id:string;kind:AlertKind;enabled:boolean;recovery:boolean;deviceId?:string;code?:string;operator?:'above'|'below'|'equals'|'change';threshold?:number|string|boolean|null};
 export type AlertObservation={value:string|number|boolean|null;timestamp:string;active:boolean};
-export type AlertState={active:boolean;value:string|number|boolean|null;timestamp:string;sequence:number};
+export type AlertState={active:boolean;value:string|number|boolean|null;timestamp:string;sequence:number;armedAt?:string;lastEventAt?:string};
+export const HIGH_LOAD_KW=2.5,LOW_BATTERY_PERCENT=20,SUSTAIN_MS=4*60000,COOLDOWN_MS=30*60000;
+export const DEFAULT_RULES:AlertRule[]=[{id:'battery',kind:'low_battery',enabled:true,recovery:false,threshold:LOW_BATTERY_PERCENT},{id:'high-load',kind:'high_load',enabled:true,recovery:false,threshold:HIGH_LOAD_KW},{id:'rule-ran',kind:'rule_ran',enabled:true,recovery:false}];
 export function transition(previous:AlertState|null,observation:AlertObservation,rule:AlertRule) {
   // Ignore repeat and out-of-order telemetry. Staleness uses evaluation time instead.
   if(previous && Date.parse(observation.timestamp)<=Date.parse(previous.timestamp))return null;
@@ -22,8 +24,13 @@ export function validateRules(input:unknown,devices:TuyaDashboardDevice[]):Alert
     const r=raw as AlertRule;
     if(typeof r.id!=='string'||!/^[-\w]{1,80}$/.test(r.id)||seen.has(r.id))throw new Error('Invalid or repeated alert ID.');
     seen.add(r.id);
-    if(!['low_battery','stale_solar','device_offline','switch_change','sensor'].includes(r.kind)||typeof r.enabled!=='boolean'||typeof r.recovery!=='boolean')throw new Error('Invalid alert type.');
+    if(!['low_battery','stale_solar','device_offline','switch_change','sensor','high_load','rule_ran'].includes(r.kind)||typeof r.enabled!=='boolean'||typeof r.recovery!=='boolean')throw new Error('Invalid alert type.');
     const rule:AlertRule={id:r.id,kind:r.kind,enabled:r.enabled,recovery:r.recovery};
+    if(r.kind==='rule_ran'){return rule;}
+    if(r.kind==='high_load') {
+      if(r.threshold!=null&&(typeof r.threshold!=='number'||!Number.isFinite(r.threshold)||r.threshold<0.1||r.threshold>20))throw new Error('Choose a load between 0.1 and 20 kW.');
+      rule.threshold=r.threshold??HIGH_LOAD_KW;return rule;
+    }
     if(r.kind==='low_battery'||r.kind==='stale_solar') {
       const threshold=r.threshold??null;
       if(threshold!==null&&(typeof threshold!=='number'||!Number.isFinite(threshold)||threshold<(r.kind==='low_battery'?1:5)||threshold>(r.kind==='low_battery'?99:1440)))throw new Error('Invalid alert threshold.');
