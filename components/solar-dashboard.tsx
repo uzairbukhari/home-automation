@@ -40,6 +40,11 @@ import { withGaps, useHistory, stampLabel } from './energy/history';
 import { RangePicker } from './energy/range-picker';
 import { HeadlineNumbers } from './energy/headline-numbers';
 import { EventsPanel } from './events-panel';
+import { EnergyBalance } from './energy/energy-balance';
+import { SolarCalendar } from './energy/solar-calendar';
+import { HourHeatmap } from './energy/hour-heatmap';
+import { SelfSufficiencyTrend } from './energy/self-sufficiency';
+import { BestWorstDays } from './energy/best-worst-days';
 import type { ReportsSnapshot } from '@/lib/solar-types';
 import { localDate, shiftDate } from '@/lib/measurements';
 import type { EnergyBucket } from '@/lib/solar-energy';
@@ -1083,6 +1088,23 @@ export function SolarDashboard({ live, settings, pin }: { live: DessSnapshot | n
               loading={loading}
               error={error}
             />
+            <EnergyBalance
+              report={reports[range]}
+              periodLabel={range === 'today' ? 'today' : range === 'month' ? 'this month' : 'this year'}
+              actions={
+                <RangePicker label="Energy balance period" value={range} options={REPORT_RANGES} onChange={setRange} />
+              }
+            />
+            <SelfSufficiencyTrend buckets={reports.calendar} />
+            <SolarCalendar
+              buckets={reports.calendar}
+              year={year}
+              onYear={setYear}
+              firstYear={Math.min(Number(localDate().slice(0, 4)), ...reports.availableYears.map(Number))}
+              currentYear={localDate().slice(0, 4)}
+            />
+            <HourHeatmap />
+            <BestWorstDays buckets={reports.calendar} today={localDate()} year={year} />
             <PerformanceReports reports={reports} error={error} range={range} setRange={setRange} />
           </>
         )}
