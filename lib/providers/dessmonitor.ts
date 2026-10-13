@@ -56,6 +56,13 @@ export class DessMonitorProvider implements MonitoringProvider {
  }
  // Raw device list: every attribute DessMonitor exposes for the plant's devices.
  async getDeviceInfo(){const data=await call<{device:Array<Record<string,unknown>>}>('&action=queryDevices&page=0&pagesize=50');return data.device??[];}
+ // One-off survey of what DessMonitor holds for this inverter. Each action fails on its own so one unsupported call never hides the rest.
+ async probe(){const selected=await inverter(),id=identity(selected),today=localDate(),attempt=async(name:string,suffix:string)=>{try{return{name,ok:true,data:await call<unknown>(suffix)}}catch(error){return{name,ok:false,error:error instanceof Error?error.message:String(error)}}}
+const keys=await attempt('querySPKeyParameters',`&action=querySPKeyParameters&devcode=${selected.devcode}`),declared=keys.ok?((keys.data as {keys?:string[]}).keys??[]):[],energyKeys=declared.filter(key=>/ENERGY|CHARG|LOAD|BATT|GRID|PV/i.test(key)),monthly=await Promise.all(energyKeys.slice(0,20).map(key=>attempt(`MonthPerDay:${key}`,`&action=querySPDeviceKeyParameterMonthPerDay&parameter=${key}${id}&date=${today.slice(0,7)}`)))
+const others=await Promise.all([attempt('queryDeviceParsEs',`&action=queryDeviceParsEs${id}`),attempt('webQueryDeviceEnergyFlowEs',`&action=webQueryDeviceEnergyFlowEs${id}`),attempt('queryDeviceCtrlField',`&action=queryDeviceCtrlField${id}`),attempt('queryDeviceStatus',`&action=queryDeviceStatus${id}`)])
+const summary=monthly.map(item=>item.ok?{name:item.name,days:((item.data as {option?:Array<{gts:string;val:string}>}).option??[]).length,nonZero:((item.data as {option?:Array<{gts:string;val:string}>}).option??[]).filter(row=>Number(row.val)>0).length}:{name:item.name,error:item.error})
+return{device:{sn:selected.sn,devcode:selected.devcode,alias:selected.alias??null},declaredKeys:declared,monthlySummary:summary,monthly,keys:keys.ok?undefined:keys,others}
+}
  async getAlarms(page=0){const selected=await inverter(),data=await call<Record<string,unknown>>(`&action=queryDeviceWarning&i18n=en_US${identity(selected)}&page=${page}&pagesize=50`),list=Object.values(data).find(Array.isArray) as Array<Record<string,unknown>>|undefined;return{entityId:selected.sn,alarms:list??[],more:Number(data.total??0)>(page+1)*50};}
  async getEnergyPeriods(type:'day'|'month'|'year',date=localDate().slice(0,type==='day'?7:4)):Promise<ProviderPeriods>{
   const selected=await inverter(),key=`${selected.sn}:${type}:${date}`,cached=periodsCache.get(key);if(cached&&cached.expiresAt>Date.now())return cached.data;
