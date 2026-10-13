@@ -25,7 +25,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useOffline } from './mobile-support';
 import { FavoriteButton } from './favorite-button';
-import type { DessSnapshot, HistorySnapshot } from '@/lib/providers/dessmonitor';
+import type { DessSnapshot } from '@/lib/providers/dessmonitor';
 import type { ChartId } from '@/lib/favorites';
 import type { Settings } from '@/lib/settings';
 import { BatteryHealth } from './battery-health';
@@ -34,12 +34,15 @@ import { chartTooltip as tooltipStyle, chartTick as tick, tooltipTrigger } from 
 import { ENERGY_TABS, ENERGY_TAB_LABELS, legacyEnergyTab, type EnergyTab } from '@/lib/energy-tabs';
 import { solarBucketVerdict, todayVerdict } from '@/lib/energy-insights';
 import { PeriodBar } from './energy/period-bar';
+import { SourceMix } from './energy/source-mix';
+import { BatteryTonight } from './energy/battery-tonight';
+import { withGaps, useHistory, stampLabel } from './energy/history';
 import { RangePicker } from './energy/range-picker';
 import { HeadlineNumbers } from './energy/headline-numbers';
 import { EventsPanel } from './events-panel';
 import type { ReportsSnapshot } from '@/lib/solar-types';
-import { localDate, localTime, shiftDate } from '@/lib/measurements';
-import { sortedPoints, type SolarPoint, type EnergyBucket } from '@/lib/solar-energy';
+import { localDate, shiftDate } from '@/lib/measurements';
+import type { EnergyBucket } from '@/lib/solar-energy';
 const ReportScreen = lazy(() => import('./report-screen').then((module) => ({ default: module.ReportScreen })));
 type Pin = { has: (id: ChartId) => boolean; toggle: (id: ChartId) => void; busy: boolean };
 const format = (n: number | null | undefined, digits = 2) =>
@@ -142,76 +145,6 @@ function ChartState({ error, empty, loading }: { error: string; empty: boolean; 
   ) : empty ? (
     <div className="chart-empty">No recorded readings for this period.</div>
   ) : null;
-}
-function withGaps(points: SolarPoint[], maxGapMs = 900000) {
-  const result: Array<SolarPoint & { stamp: number }> = [];
-  for (const p of sortedPoints(points)) {
-    const stamp = Date.parse(p.sourceTimestamp),
-      previous = result.at(-1);
-    if (previous && stamp - previous.stamp > maxGapMs)
-      result.push({ ...p, stamp: previous.stamp + 1, solar: null, home: null, grid: null, battery: null });
-    result.push({ ...p, stamp });
-  }
-  return result;
-}
-function useHistory(range: string, from?: string, to?: string, enabled = true) {
-  const [data, setData] = useState<HistorySnapshot | null>(null),
-    [error, setError] = useState(''),
-    [loading, setLoading] = useState(false);
-  useEffect(() => {
-    if (!enabled) return;
-    const controller = new AbortController();
-    let retry: ReturnType<typeof setTimeout>,
-      attempts = 0;
-    const follow = (pending?: boolean) => {
-      clearTimeout(retry);
-      if (pending && attempts++ < 3)
-        retry = setTimeout(() => {
-          if (!controller.signal.aborted && document.visibilityState !== 'hidden' && navigator.onLine) void refresh();
-        }, 5000);
-    };
-    async function refresh() {
-      setLoading(true);
-      setError('');
-      try {
-        const params = new URLSearchParams({ range });
-        if (from) params.set('from', from);
-        if (to) params.set('to', to);
-        const body = await readJson<HistorySnapshot & { error?: string; refreshing?: boolean }>(
-          `/api/solar/history?${params}`,
-        );
-        if (controller.signal.aborted) return;
-        setData(body);
-        follow(body.refreshing);
-        if (body.error) setError(`Saved history · ${body.error}`);
-      } catch (reason) {
-        if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'History unavailable');
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    }
-    queueMicrotask(() => {
-      if (!controller.signal.aborted) setData(null);
-    });
-    const stop = foregroundPoll(() => void refresh(), 300000);
-    return () => {
-      controller.abort();
-      clearTimeout(retry);
-      stop();
-    };
-  }, [range, from, to, enabled]);
-  return { data, error, loading };
-}
-function stampLabel(stamp: number, short = false) {
-  return short
-    ? localTime(new Date(stamp).toISOString())
-    : new Date(stamp).toLocaleString('en-PK', {
-        timeZone: 'Asia/Karachi',
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
 }
 const shortDate = (date: string) =>
   new Date(`${date}T12:00:00Z`).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' });
@@ -1133,6 +1066,8 @@ export function SolarDashboard({ live, settings, pin }: { live: DessSnapshot | n
               <p className="verdict">{todayVerdict(live?.today)}</p>
               <HeadlineNumbers today={live?.today} />
             </section>
+            <BatteryTonight live={live} capacity={settings.capacity} reserve={settings.threshold} />
+            <SourceMix live={live} />
             <PowerHistory live={live} pin={pin} />
           </>
         )}
