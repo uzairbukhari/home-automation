@@ -20,10 +20,15 @@ html[data-theme='dark'] {
   --ring: #76cbb9;
   --destructive: #ffa8a0;
   --surface-raised: #213137;
-  --energy-solar: #ecc374;
-  --energy-home: #76cbb9;
-  --energy-battery: #99d5a5;
-  --energy-grid: #a6b8d3;
+  --energy-solar: var(--flow-solar);
+  --energy-home: var(--flow-home);
+  --energy-battery: var(--flow-charge);
+  --energy-grid: var(--flow-grid-import);
+  --chart-1: var(--flow-solar);
+  --chart-2: var(--flow-home);
+  --chart-3: var(--flow-charge);
+  --chart-4: var(--flow-grid-import);
+  --chart-5: var(--flow-discharge);
   --status-good: #99d5a5;
   --status-warn: #ecc374;
   --shadow: 0 4px 24px #0000000d;
@@ -58,10 +63,15 @@ html[data-theme='light'] {
   --ring: #236c5c;
   --destructive: #af3c34;
   --surface-raised: #f2f5ef;
-  --energy-solar: #875c0d;
-  --energy-home: #236c5c;
-  --energy-battery: #3d754b;
-  --energy-grid: #526b92;
+  --energy-solar: var(--flow-solar);
+  --energy-home: var(--flow-home);
+  --energy-battery: var(--flow-charge);
+  --energy-grid: var(--flow-grid-import);
+  --chart-1: var(--flow-solar);
+  --chart-2: var(--flow-home);
+  --chart-3: var(--flow-charge);
+  --chart-4: var(--flow-grid-import);
+  --chart-5: var(--flow-discharge);
   --status-good: #3d754b;
   --status-warn: #946510;
   --shadow: 0 4px 24px #203b3106;
@@ -1171,10 +1181,6 @@ select {
 .solar-widgets {
   display: grid;
   gap: 20px;
-}
-.solar-widgets[data-section='overview'] {
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  align-items: start;
 }
 .chart-panel,
 .soc-card {
@@ -2314,7 +2320,6 @@ select {
     grid-template-columns: 190px minmax(0, 1fr);
     gap: 20px;
   }
-  .solar-widgets[data-section='overview'],
   .battery-grid,
   .billing-content {
     grid-template-columns: 1fr;
@@ -2596,7 +2601,6 @@ select {
     max-width: 100%;
     width: 100%;
   }
-  .solar-widgets[data-section='overview'],
   .battery-grid {
     grid-template-columns: 1fr;
   }
@@ -3204,4 +3208,109 @@ select {
   color: var(--muted-foreground);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* Energy tabs: verdict line, headline numbers, period bar */
+.energy-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.energy-tabs button {
+  flex: 1 0 auto;
+}
+.verdict {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+.tab-intro {
+  display: grid;
+  gap: 16px;
+}
+.headline-numbers {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.headline-numbers > div {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  border-top: 3px solid var(--muted-foreground);
+}
+.headline-numbers > div[data-tone='solar'] {
+  border-top-color: var(--flow-solar);
+}
+.headline-numbers > div[data-tone='home'] {
+  border-top-color: var(--flow-home);
+}
+.headline-numbers > div[data-tone='grid'] {
+  border-top-color: var(--flow-grid-import);
+}
+.headline-numbers > div[data-tone='saving'] {
+  border-top-color: var(--flow-charge);
+}
+.headline-numbers span {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.headline-numbers strong {
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.headline-numbers small {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.period-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.period-bar strong {
+  min-width: 9ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.period-now {
+  margin-left: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.8125rem;
+}
+.period-bar button:disabled {
+  opacity: 0.4;
+}
+.range-row {
+  grid-column: 1 / -1;
+}
+.chart-card {
+  display: grid;
+  gap: 16px;
+}
+.series-controls > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.series-controls > span > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+@media (max-width: 720px) {
+  .headline-numbers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

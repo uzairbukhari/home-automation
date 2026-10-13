@@ -147,12 +147,11 @@ test('Readable rule summaries preserve inclusive legacy values, actual actions a
  assert.equal(homeCondition({solar:null,home:100,grid:null,charge:2,discharge:0}),'Battery charging');
  assert.equal(homeCondition({solar:0,home:0,grid:0,charge:0,discharge:0}),'Your home’s latest energy readings');
 });
-test('Report destinations preserve the Appliances address and Billing deep link',()=>{
- const Module=require('node:module'),load=Module._load;Module._load=function(name,...args){return name==='next/navigation'?{usePathname:()=>'/reports',useRouter:()=>({push(){}})}:load.call(this,name,...args);};
- const fresh=()=>{for(const key of Object.keys(require.cache))if(/components[\\/](app-shell|presentation)\.tsx$/.test(key))delete require.cache[key];};fresh();
- let html;try{const React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),{ReportNavigation}=require('../components/presentation.tsx');
- html=renderToStaticMarkup(React.createElement(ReportNavigation,{selected:'billing'}));}finally{Module._load=load;fresh();}
- assert.match(html,/href="\/solar\?section=reports&amp;report=appliances"/);assert.match(html,/aria-current="page" href="\/solar\?section=reports&amp;report=billing"/);
+test('Period bar labels the period and disables stepping past the latest one',()=>{
+ const React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),{PeriodBar}=require('../components/energy/period-bar.tsx');
+ const html=renderToStaticMarkup(React.createElement(PeriodBar,{label:'Mon, 12 Oct',onPrev(){},onNext(){},nextDisabled:true,onNow(){}}));
+ assert.match(html,/Mon, 12 Oct/);assert.match(html,/aria-label="Previous period"/);
+ assert.match(html,/aria-label="Next period"[^>]*disabled/);assert.match(html,/class="period-now"[^>]*disabled/);
 });
 test('Settings category switches require a decision for unsaved edits',async()=>{
  const h=navigationHarness('https://photon.test/settings?category=battery'),[,category]=h.exports.useUrlState('category','');h.effects.forEach(run=>run());

@@ -29,21 +29,19 @@ import type { DessSnapshot, HistorySnapshot } from '@/lib/providers/dessmonitor'
 import type { ChartId } from '@/lib/favorites';
 import type { Settings } from '@/lib/settings';
 import { BatteryHealth } from './battery-health';
-import { ReportNavigation, ChartAlternative, LoadingCards, EmptyState } from './presentation';
+import { ChartAlternative, LoadingCards, EmptyState } from './presentation';
+import { chartTooltip as tooltipStyle, chartTick as tick, tooltipTrigger } from '@/lib/chart-theme';
+import { ENERGY_TABS, ENERGY_TAB_LABELS, legacyEnergyTab, type EnergyTab } from '@/lib/energy-tabs';
+import { solarBucketVerdict, todayVerdict } from '@/lib/energy-insights';
+import { PeriodBar } from './energy/period-bar';
+import { RangePicker } from './energy/range-picker';
+import { HeadlineNumbers } from './energy/headline-numbers';
+import { EventsPanel } from './events-panel';
 import type { ReportsSnapshot } from '@/lib/solar-types';
 import { localDate, localTime, shiftDate } from '@/lib/measurements';
 import { sortedPoints, type SolarPoint, type EnergyBucket } from '@/lib/solar-energy';
 const ReportScreen = lazy(() => import('./report-screen').then((module) => ({ default: module.ReportScreen })));
 type Pin = { has: (id: ChartId) => boolean; toggle: (id: ChartId) => void; busy: boolean };
-const tooltipTrigger = () =>
-  typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches ? 'hover' : 'click';
-const tooltipStyle = {
-  background: 'var(--popover)',
-  border: '1px solid var(--border)',
-  borderRadius: 14,
-  color: 'var(--foreground)',
-};
-const tick = { fill: 'var(--muted-foreground)', fontSize: 12 };
 const format = (n: number | null | undefined, digits = 2) =>
   n == null ? '—' : n.toLocaleString('en', { maximumFractionDigits: digits, minimumFractionDigits: digits });
 function ChartHeading({
@@ -215,28 +213,38 @@ function stampLabel(stamp: number, short = false) {
         minute: '2-digit',
       });
 }
+const shortDate = (date: string) =>
+  new Date(`${date}T12:00:00Z`).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' });
+const dayLabel = (date: string) =>
+  date === localDate()
+    ? 'Today'
+    : new Date(`${date}T12:00:00Z`).toLocaleDateString('en-PK', { weekday: 'short', day: 'numeric', month: 'short' });
 function PowerHistory({ live, pin }: { live: DessSnapshot | null; pin: Pin }) {
   const [range, setRange] = useUrlState('powerPeriod', 'day', ['day', 'week', 'month', 'custom']),
     [from, setFrom] = useUrlState('from', shiftDate(localDate(), -6)),
     [to, setTo] = useUrlState('to', localDate()),
     [series, setSeries] = useUrlState('powerSeries', 'solar,home,grid'),
+    [date, setDate] = useUrlState('date', localDate()),
+    today = localDate(),
+    pastDay = range === 'day' && date < today,
     visible = {
       solar: series.split(',').includes('solar'),
       home: series.split(',').includes('home'),
       grid: series.split(',').includes('grid'),
     },
     lastDay = live ? localDate(Date.parse(live.updatedAt)) : '',
-    dayEmpty = range === 'day' && Boolean(live) && !live?.series?.length,
+    dayEmpty = range === 'day' && !pastDay && Boolean(live) && !live?.series?.length,
     history = useHistory(
-      dayEmpty ? 'custom' : range,
-      range === 'custom' ? from : dayEmpty ? lastDay : undefined,
-      range === 'custom' ? to : dayEmpty ? lastDay : undefined,
-      range !== 'day' || dayEmpty,
+      dayEmpty || pastDay ? 'custom' : range,
+      range === 'custom' ? from : pastDay ? date : dayEmpty ? lastDay : undefined,
+      range === 'custom' ? to : pastDay ? date : dayEmpty ? lastDay : undefined,
+      range !== 'day' || dayEmpty || pastDay,
     );
-  const points = range === 'day' && !dayEmpty ? (live?.series ?? []) : (history.data?.series ?? []),
+  const useLive = range === 'day' && !dayEmpty && !pastDay,
+    points = useLive ? (live?.series ?? []) : (history.data?.series ?? []),
     chart = withGaps(points, range === 'month' ? 87300000 : range === 'week' ? 4500000 : 900000),
-    error = range === 'day' && !dayEmpty ? '' : history.error,
-    loading = (range !== 'day' || dayEmpty) && history.loading;
+    error = useLive ? '' : history.error,
+    loading = !useLive && history.loading;
   return (
     <Card className="panel chart-panel">
       <ChartHeading id="power-history" pin={pin} title="Production and demand" eyebrow="Power history">
@@ -253,6 +261,15 @@ function PowerHistory({ live, pin }: { live: DessSnapshot | null; pin: Pin }) {
           ))}
         </div>
       </ChartHeading>
+      {range === 'day' && (
+        <PeriodBar
+          label={dayLabel(date)}
+          onPrev={() => setDate(shiftDate(date, -1))}
+          onNext={() => setDate(shiftDate(date, 1))}
+          nextDisabled={date >= today}
+          onNow={() => setDate(today)}
+        />
+      )}
       {range === 'custom' && (
         <div className="custom-range">
           <label>
@@ -270,9 +287,11 @@ function PowerHistory({ live, pin }: { live: DessSnapshot | null; pin: Pin }) {
         <div>
           <strong>
             {range === 'day'
-              ? dayEmpty
-                ? `Last recorded day · ${new Date(`${lastDay}T12:00:00Z`).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' })}`
-                : 'Today’s power readings'
+              ? pastDay
+                ? `${dayLabel(date)}’s power readings`
+                : dayEmpty
+                  ? `Last recorded day · ${new Date(`${lastDay}T12:00:00Z`).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' })}`
+                  : 'Today’s power readings'
               : range === 'month'
                 ? 'Daily average power'
                 : 'Recorded power profile'}
@@ -331,7 +350,8 @@ function PowerHistory({ live, pin }: { live: DessSnapshot | null; pin: Pin }) {
                   type="linear"
                   dataKey="solar"
                   stroke="var(--energy-solar)"
-                  fill="#f8d35a15"
+                  fill="var(--energy-solar)"
+                  fillOpacity={0.12}
                   strokeWidth={2}
                   connectNulls={false}
                   isAnimationActive={false}
@@ -506,6 +526,8 @@ function EnergyTotals({
   pin,
   year,
   setYear,
+  weekEnd,
+  setWeekEnd,
   loading,
   error,
 }: {
@@ -513,6 +535,8 @@ function EnergyTotals({
   pin: Pin;
   year: string;
   setYear: (v: string) => void;
+  weekEnd: string;
+  setWeekEnd: (v: string) => void;
   loading: boolean;
   error: string;
 }) {
@@ -520,7 +544,7 @@ function EnergyTotals({
     [series, setSeries] = useUrlState('energySeries', 'solar,grid'),
     visible = { solar: series.split(',').includes('solar'), grid: series.split(',').includes('grid') },
     today = localDate(),
-    sevenDaysStart = shiftDate(today, -6),
+    sevenDaysStart = shiftDate(weekEnd, -6),
     daily = reports?.buckets.daily ?? [],
     monthly = reports?.buckets.monthly ?? [],
     yearly = reports?.buckets.yearly ?? [];
@@ -560,11 +584,16 @@ function EnergyTotals({
         : yearly;
   const title =
       range === 'week'
-        ? 'Last 7 days · day by day'
+        ? weekEnd === today
+          ? 'Last 7 days · day by day'
+          : `${shortDate(sevenDaysStart)} – ${shortDate(weekEnd)} · day by day`
         : range === 'month'
           ? `${year} · month by month`
           : 'All years · year by year',
-    years = [...new Set([today.slice(0, 4), ...(reports?.availableYears ?? [])])].sort().reverse();
+    firstYear = Math.min(Number(today.slice(0, 4)), ...(reports?.availableYears ?? []).map(Number)),
+    verdict = solarBucketVerdict(chart, range === 'week' ? 'day' : range === 'month' ? 'month' : 'year', (date) =>
+      range === 'week' ? shortDate(date) : range === 'month' ? date.slice(5) : date,
+    );
   return (
     <Card className="panel chart-panel">
       <ChartHeading id="energy-totals" title="Solar production & grid use" eyebrow="Energy totals" pin={pin}>
@@ -585,23 +614,33 @@ function EnergyTotals({
           ))}
         </div>
       </ChartHeading>
+      {range === 'week' && (
+        <PeriodBar
+          label={weekEnd === today ? 'Last 7 days' : `${shortDate(sevenDaysStart)} – ${shortDate(weekEnd)}`}
+          onPrev={() => setWeekEnd(shiftDate(weekEnd, -7))}
+          onNext={() => setWeekEnd(shiftDate(weekEnd, 7) > today ? today : shiftDate(weekEnd, 7))}
+          nextDisabled={weekEnd >= today}
+          onNow={() => setWeekEnd(today)}
+          nowLabel="Latest"
+        />
+      )}
+      {range === 'month' && (
+        <PeriodBar
+          label={year}
+          onPrev={() => setYear(String(Number(year) - 1))}
+          onNext={() => setYear(String(Number(year) + 1))}
+          prevDisabled={Number(year) <= firstYear}
+          nextDisabled={year >= today.slice(0, 4)}
+          onNow={() => setYear(today.slice(0, 4))}
+          nowLabel="This year"
+        />
+      )}
+      {verdict && <p className="verdict">{verdict}</p>}
       <div className="chart-summary">
         <div>
           <strong>{title}</strong>
           <span>Solar energy and imported grid energy · kWh</span>
         </div>
-        {range === 'month' && (
-          <select
-            aria-label="Reporting year"
-            className="year-picker"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-          >
-            {years.map((y) => (
-              <option key={y}>{y}</option>
-            ))}
-          </select>
-        )}
       </div>
       <div className="series-controls energy-series-controls" aria-label="Energy chart series">
         {[
@@ -984,46 +1023,42 @@ function BatteryPerformance({
     />
   );
 }
-export function SolarDashboard({
-  live,
-  settings,
-  pin,
-  visibleCharts,
-  showReports = false,
-}: {
-  live: DessSnapshot | null;
-  settings: Settings;
-  pin: Pin;
-  visibleCharts?: ChartId[];
-  showReports?: boolean;
-}) {
+const REPORT_TABS: readonly EnergyTab[] = ['trends', 'battery', 'costs'];
+const REPORT_RANGES = [
+  ['today', 'Today'],
+  ['month', 'This month'],
+  ['year', 'This year'],
+] as const;
+export function SolarDashboard({ live, settings, pin }: { live: DessSnapshot | null; settings: Settings; pin: Pin }) {
   const [entity, setEntity] = useUrlState('entity', '', ['', 'battery', 'solar', 'grid', 'home']);
-  const [section, setSection] = useUrlState('section', 'overview', ['overview', 'history', 'reports']);
-  const [reportTab] = useUrlState('report', 'performance', ['performance', 'appliances', 'billing']);
+  const [section, setSection] = useUrlState('section', 'today', ENERGY_TABS);
+  const tab = section as EnergyTab;
   const [reportRange, setRange] = useUrlState('reportPeriod', 'month', ['today', 'month', 'year']),
-    [year, setYear] = useUrlState('year', localDate().slice(0, 4));
-  const range = reportRange as ReportRange,
-    selectedCharts =
-      visibleCharts ??
-      (section === 'history'
-        ? ['power-history', 'soc-history']
-        : section === 'overview'
-          ? ['battery-window', 'energy-totals']
-          : []);
-  const chartKey = selectedCharts.join(',');
+    [year, setYear] = useUrlState('year', localDate().slice(0, 4)),
+    [weekEnd, setWeekEnd] = useUrlState('weekEnd', localDate());
+  const range = reportRange as ReportRange;
+  // Links saved before the five-tab layout (section=overview|history|reports) are moved to the matching tab.
+  useEffect(() => {
+    const params = new URL(location.href).searchParams,
+      target = legacyEnergyTab(params.get('section'), params.get('report'), params.get('chart'));
+    if (!target) return;
+    const url = new URL(location.href);
+    url.searchParams.set('section', target);
+    url.searchParams.delete('report');
+    history.replaceState(history.state, '', url);
+    window.dispatchEvent(new Event('photon-navigation'));
+  }, []);
   useEffect(() => {
     const id = new URL(location.href).searchParams.get('chart');
-    if (id && chartKey.split(',').includes(id))
+    if (id)
       requestAnimationFrame(() =>
         document.querySelector(`[data-chart="${id}"]`)?.closest('.panel')?.scrollIntoView({ block: 'start' }),
       );
-  }, [section, chartKey]);
-  const solarReport = showReports && section === 'reports' && reportTab !== 'appliances';
-  const [reports, setReports] = useState<ReportsSnapshot | null>(null),
+  }, [tab]);
+  const needsReports = REPORT_TABS.includes(tab),
+    [reports, setReports] = useState<ReportsSnapshot | null>(null),
     [error, setError] = useState(''),
-    [loading, setLoading] = useState(true),
-    needsReports =
-      (showReports && section === 'reports' && reportTab !== 'appliances') || selectedCharts.includes('energy-totals');
+    [loading, setLoading] = useState(true);
   useEffect(() => {
     if (!needsReports) return;
     const controller = new AbortController();
@@ -1040,7 +1075,7 @@ export function SolarDashboard({
       setLoading(true);
       try {
         const data = await readJson<ReportsSnapshot & { error?: string; refreshing?: boolean }>(
-          `/api/solar/reports?year=${year}&threshold=${settings.threshold}`,
+          `/api/solar/reports?year=${year}&weekEnd=${weekEnd}&threshold=${settings.threshold}`,
         );
         if (controller.signal.aborted) return;
         setReports(data);
@@ -1058,72 +1093,98 @@ export function SolarDashboard({
       clearTimeout(retry);
       stop();
     };
-  }, [needsReports, year, settings]);
+  }, [needsReports, year, weekEnd, settings]);
   if (entity)
     return <EnergyDetail key={entity} entity={entity} onClose={() => setEntity('')} live={live} settings={settings} />;
+  const unavailable = needsReports && !reports;
   return (
     <>
-      <nav className="section-tabs" aria-label="Solar sections">
-        {['overview', 'history', 'reports'].map((tab) => (
-          <button key={tab} aria-pressed={section === tab} onClick={() => setSection(tab, true)}>
-            {tab[0].toUpperCase() + tab.slice(1)}
+      <nav className="section-tabs energy-tabs" aria-label="Energy sections">
+        {ENERGY_TABS.map((id) => (
+          <button key={id} aria-pressed={tab === id} onClick={() => setSection(id, true)}>
+            {ENERGY_TAB_LABELS[id]}
           </button>
         ))}
       </nav>
-      {showReports && section === 'reports' && (
-        <ReportNavigation selected={reportTab as 'performance' | 'appliances' | 'billing'} />
-      )}
-      {solarReport && reports && loading && (
+      {needsReports && reports && loading && (
         <p className="report-footnote" role="status">
           Updating saved report…
         </p>
       )}
-      {solarReport && error && (
+      {needsReports && error && (
         <p className="report-error" role="status">
           {error}
         </p>
       )}
-      <div className="solar-widgets" data-section={section}>
-        {showReports && section === 'reports' && reportTab === 'appliances' && (
-          <Suspense fallback={<LoadingCards label="Loading appliance report" />}>
-            <ReportScreen />
-          </Suspense>
+      {unavailable &&
+        (error ? (
+          <EmptyState
+            title="Report unavailable"
+            note="Reconnect or review collection health to load stored measurements."
+            action={<Link href="/settings?category=storage">Collection health</Link>}
+          />
+        ) : (
+          <LoadingCards label="Loading stored report" />
+        ))}
+      <div className="solar-widgets" data-section={tab}>
+        {tab === 'today' && (
+          <>
+            <section className="tab-intro">
+              <p className="verdict">{todayVerdict(live?.today)}</p>
+              <HeadlineNumbers today={live?.today} />
+            </section>
+            <PowerHistory live={live} pin={pin} />
+          </>
         )}
-        {solarReport &&
-          !reports &&
-          (error ? (
-            <EmptyState
-              title="Report unavailable"
-              note="Reconnect or review collection health to load stored measurements."
-              action={<Link href="/settings?category=storage">Collection health</Link>}
+        {tab === 'trends' && reports && (
+          <>
+            <EnergyTotals
+              reports={reports}
+              pin={pin}
+              year={year}
+              setYear={setYear}
+              weekEnd={weekEnd}
+              setWeekEnd={setWeekEnd}
+              loading={loading}
+              error={error}
             />
-          ) : (
-            <LoadingCards label="Loading stored report" />
-          ))}
-        {showReports && section === 'reports' && reports && reportTab === 'performance' && (
-          <PerformanceReports reports={reports} error={error} range={range} setRange={setRange} />
+            <PerformanceReports reports={reports} error={error} range={range} setRange={setRange} />
+          </>
         )}
-        {selectedCharts.includes('power-history') && <PowerHistory live={live} pin={pin} />}{' '}
-        {selectedCharts.includes('energy-totals') && (
-          <EnergyTotals reports={reports} pin={pin} year={year} setYear={setYear} loading={loading} error={error} />
+        {tab === 'battery' && (
+          <>
+            <div className="battery-grid">
+              <BatteryWindow live={live} settings={settings} pin={pin} />
+              <ChargeHistory settings={settings} pin={pin} />
+            </div>
+            {reports && (
+              <div className="battery-overview-grid">
+                <div className="range-row">
+                  <RangePicker
+                    label="Battery report period"
+                    value={range}
+                    options={REPORT_RANGES}
+                    onChange={setRange}
+                  />
+                </div>
+                <BatteryPerformance reports={reports} settings={settings} range={range} />
+              </div>
+            )}
+          </>
         )}
-        <div
-          className={
-            showReports && section === 'reports'
-              ? 'battery-overview-grid'
-              : selectedCharts.includes('battery-window') && selectedCharts.includes('soc-history')
-                ? 'battery-grid'
-                : 'single-battery-widget'
-          }
-        >
-          {selectedCharts.includes('battery-window') && <BatteryWindow live={live} settings={settings} pin={pin} />}{' '}
-          {selectedCharts.includes('soc-history') && <ChargeHistory settings={settings} pin={pin} />}{' '}
-          {showReports && section === 'reports' && reportTab === 'performance' && (
-            <BatteryPerformance reports={reports} settings={settings} range={range} />
-          )}
-        </div>
-        {showReports && section === 'reports' && reports && reportTab === 'billing' && (
-          <BillingSavings reports={reports} settings={settings} />
+        {tab === 'grid' && (
+          <>
+            <EnergyDetail key="grid" embedded entity="grid" onClose={() => undefined} live={live} settings={settings} />
+            <EventsPanel />
+          </>
+        )}
+        {tab === 'costs' && (
+          <>
+            {reports && <BillingSavings reports={reports} settings={settings} />}
+            <Suspense fallback={<LoadingCards label="Loading appliance report" />}>
+              <ReportScreen />
+            </Suspense>
+          </>
         )}
       </div>
     </>

@@ -1,5 +1,4 @@
 'use client';
-import { OfflineLink as Link } from './app-shell';
 import type { ReactNode } from 'react';
 import { CircleHelp, MoreHorizontal, Trash2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/dropdown-menu';
@@ -77,24 +76,6 @@ export function LoadingCards({ label, count = 3 }: { label: string; count?: numb
       ))}
       <span className="sr-only">{label}</span>
     </div>
-  );
-}
-export function ReportNavigation({ selected }: { selected: 'performance' | 'appliances' | 'billing' }) {
-  return (
-    <nav className="report-navigation" aria-label="Report type">
-      <Link href="/solar?section=reports" aria-current={selected === 'performance' ? 'page' : undefined}>
-        Performance
-      </Link>
-      <Link
-        href="/solar?section=reports&report=appliances"
-        aria-current={selected === 'appliances' ? 'page' : undefined}
-      >
-        Appliances
-      </Link>
-      <Link href="/solar?section=reports&report=billing" aria-current={selected === 'billing' ? 'page' : undefined}>
-        Billing
-      </Link>
-    </nav>
   );
 }
 export function DeleteMenu({
