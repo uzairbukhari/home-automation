@@ -168,3 +168,193 @@ test('source mix energy integrates watts into kWh and words the shares', () => {
   );
   assert.equal(mixVerdict(mixEnergy([])), null);
 });
+test('energy balance splits a period into the five routes and never loses energy', () => {
+  const { energyBalance } = require('../lib/trends.ts');
+  const b = energyBalance({
+    solarKwh: 10,
+    gridKwh: 3,
+    homeKwh: 9,
+    directSolarKwh: 5,
+    batteryChargeKwh: 4,
+    batteryDischargeKwh: 3,
+  });
+  assert.equal(b.solarHome, 5);
+  assert.equal(b.solarBattery, 4);
+  assert.equal(b.gridBattery, 0);
+  assert.equal(b.gridHome, 1);
+  assert.equal(b.batteryHome, 3);
+  const used = b.solarHome + b.gridHome + b.batteryHome;
+  assert.ok(used <= 9 + 1e-9);
+  assert.ok(Math.abs(b.other - (10 + 3 + 3 - 9 - 4)) < 1e-9);
+  assert.equal(
+    energyBalance({
+      solarKwh: null,
+      gridKwh: 1,
+      homeKwh: 1,
+      directSolarKwh: 0,
+      batteryChargeKwh: 0,
+      batteryDischargeKwh: 0,
+    }),
+    null,
+  );
+  const grid = energyBalance({
+    solarKwh: 0,
+    gridKwh: 6,
+    homeKwh: 4,
+    directSolarKwh: 0,
+    batteryChargeKwh: 2,
+    batteryDischargeKwh: 0,
+  });
+  assert.equal(grid.gridBattery, 2);
+  assert.equal(grid.gridHome, 4);
+});
+test('sankey node heights are proportional and fit the height', () => {
+  const { sankeyLayout } = require('../lib/trends.ts');
+  const s = sankeyLayout(
+    [
+      { from: 'solar', to: 'home', value: 6 },
+      { from: 'solar', to: 'battery', value: 2 },
+      { from: 'grid', to: 'home', value: 2 },
+      { from: 'x', to: 'y', value: 0 },
+    ],
+    200,
+    10,
+  );
+  const solar = s.left.find((n) => n.id === 'solar'),
+    grid = s.left.find((n) => n.id === 'grid');
+  assert.ok(Math.abs(solar.height / grid.height - 4) < 1e-9);
+  assert.equal(s.left.length, 2);
+  const bottom = Math.max(...s.left.map((n) => n.y + n.height), ...s.right.map((n) => n.y + n.height));
+  assert.ok(bottom <= 200 + 1e-9);
+});
+test('calendar grid lays a year out Monday first with 365 or 366 cells', () => {
+  const { calendarGrid } = require('../lib/trends.ts');
+  const g = calendarGrid([{ date: '2026-01-05', solar: 8, grid: null, home: null }], '2026');
+  const cells = g.weeks.flat().filter(Boolean);
+  assert.equal(cells.length, 365);
+  assert.equal(g.weeks[0][3].date, '2026-01-01');
+  assert.equal(g.max, 8);
+  assert.equal(g.weeks[1][0].solar, 8);
+  assert.equal(calendarGrid([], '2024').weeks.flat().filter(Boolean).length, 366);
+});
+test('best and worst days skip today and need enough days to separate the two lists', () => {
+  const { bestWorstDays, selfSufficiencySeries } = require('../lib/trends.ts');
+  const days = Array.from({ length: 8 }, (_, i) => ({ date: '2026-10-0' + (i + 1), solar: i + 1, grid: 1, home: 4 }));
+  const r = bestWorstDays([...days, { date: '2026-10-09', solar: 50, grid: 0, home: 1 }], '2026-10-09', 3);
+  assert.deepEqual(
+    r.best.map((d) => d.solar),
+    [8, 7, 6],
+  );
+  assert.deepEqual(
+    r.worst.map((d) => d.solar),
+    [1, 2, 3],
+  );
+  assert.deepEqual(bestWorstDays(days.slice(0, 4), '2026-11-01', 3).worst, []);
+  assert.deepEqual(
+    selfSufficiencySeries([
+      { date: '2026-10-01', solar: 1, grid: 1, home: 4 },
+      { date: '2026-10-02', solar: 1, grid: null, home: 4 },
+    ]),
+    [{ date: '2026-10-01', pct: 75 }],
+  );
+});
+test('peak hour finds the hour with the highest average power', () => {
+  const { peakHour } = require('../lib/trends.ts');
+  const day = (v) => ({
+    date: 'd',
+    home: Array.from({ length: 24 }, (_, h) => (h === 19 ? v : 200)),
+    solar: Array(24).fill(null),
+    grid: Array(24).fill(null),
+  });
+  const p = peakHour([day(1000), day(2000), day(3000)], 'home');
+  assert.equal(p.hour, 19);
+  assert.equal(p.watts, 2000);
+  assert.equal(peakHour([day(1)], 'solar'), null);
+});
+test('heatmap route averages stored hourly power per day and the reports route returns the year calendar', async () => {
+  const { database, auth } = require('./helpers.cjs'),
+    { sqlite } = database(),
+    oldUser = auth.user;
+  const { saveSnapshot, saveProviderPeriods } = require('../lib/solar-store.ts'),
+    { localDate, shiftDate } = require('../lib/measurements.ts');
+  const today = localDate(),
+    yesterday = shiftDate(today, -1),
+    year = today.slice(0, 4),
+    stamp = new Date().toISOString();
+  auth.user = { userId: 'heatmap-fixture' };
+  try {
+    await saveSnapshot({
+      device: { serial: 'heatmap-fixture', name: 'Fixture', collector: 'test', mode: 'Battery mode' },
+      updatedAt: stamp,
+      readings: [{ metric: 'battery_soc', value: 50, quality: 'good' }],
+      series: [{ sourceTimestamp: stamp, solar: 100, home: 50, grid: 0, battery: 50 }],
+    });
+    const hours = Array.from({ length: 24 }, (_, h) =>
+      h === 19 ? { home: { integral: 1800, hours: 1, onHours: 1 } } : {},
+    );
+    sqlite
+      .prepare(
+        "INSERT INTO telemetry_summaries(source,entity_id,granularity,period,room,data,updated_at,calculation_version) VALUES ('dessmonitor','heatmap-fixture','day',?,'',?,?,3)",
+      )
+      .run(
+        yesterday,
+        JSON.stringify({
+          metrics: {},
+          hours,
+          socHours: [],
+          energyKwh: null,
+          energySource: 'missing',
+          energyHours: 0,
+          partial: true,
+          samples: 1,
+        }),
+        stamp,
+      );
+    const response = await require('../app/api/solar/heatmap/route.ts').GET(
+      new Request('http://localhost/api/solar/heatmap?days=7'),
+    );
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    const row = body.days.find((d) => d.date === yesterday);
+    assert.ok(row);
+    assert.equal(row.home[19], 1800);
+    assert.equal(row.home[3], null);
+    assert.equal(row.solar[19], null);
+    const bad = await (
+      await require('../app/api/solar/heatmap/route.ts').GET(new Request('http://localhost/api/solar/heatmap?days=500'))
+    ).json();
+    assert.equal(bad.days.length, body.days.length);
+    await saveProviderPeriods({
+      entityId: 'heatmap-fixture',
+      type: 'day',
+      buckets: [
+        {
+          date: today,
+          solar: 4.2,
+          grid: null,
+          home: null,
+          source: 'provider:ENERGY_TODAY',
+          gridSource: 'missing',
+          coveredHours: 0,
+          partial: true,
+        },
+      ],
+    });
+    const reports = await (
+      await require('../app/api/solar/reports/route.ts').GET(
+        new Request('http://localhost/api/solar/reports?year=' + year),
+      )
+    ).json();
+    assert.ok(Array.isArray(reports.calendar));
+    assert.equal(reports.calendar.find((b) => b.date === today)?.solar, 4.2);
+    auth.user = null;
+    assert.equal(
+      (await require('../app/api/solar/heatmap/route.ts').GET(new Request('http://localhost/api/solar/heatmap')))
+        .status,
+      401,
+    );
+  } finally {
+    auth.user = oldUser;
+    sqlite.close();
+  }
+});

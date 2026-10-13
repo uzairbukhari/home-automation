@@ -3318,3 +3318,75 @@ select {
   display: grid;
   gap: 8px;
 }
+.sankey {
+  width: 100%;
+  height: auto;
+  max-height: 320px;
+}
+.sankey-label {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--foreground);
+}
+.sankey-value {
+  font-size: 12px;
+  font-weight: 400;
+  fill: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.heatmap-scroll {
+  overflow-x: auto;
+}
+.heatmap {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.heat-axis {
+  font-size: 10.5px;
+  fill: var(--muted-foreground);
+}
+.day-ranks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.day-rank h3 {
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+.day-rank ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.day-rank li {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) 5.5rem;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.875rem;
+}
+.day-rank li strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.rank-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--muted);
+  overflow: hidden;
+}
+.rank-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+@media (max-width: 720px) {
+  .day-ranks {
+    grid-template-columns: 1fr;
+  }
+}
