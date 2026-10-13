@@ -44,6 +44,9 @@ import { EnergyBalance } from './energy/energy-balance';
 import { SolarCalendar } from './energy/solar-calendar';
 import { HourHeatmap } from './energy/hour-heatmap';
 import { GridHealth } from './energy/grid-health';
+import { BatteryInsights } from './energy/battery-insights';
+import { BillOutlook, Baseload, SolarYield } from './energy/cost-insights';
+import { unprotectedRate } from '@/lib/tariff';
 import { SelfSufficiencyTrend } from './energy/self-sufficiency';
 import { BestWorstDays } from './energy/best-worst-days';
 import type { ReportsSnapshot } from '@/lib/solar-types';
@@ -1126,6 +1129,11 @@ export function SolarDashboard({ live, settings, pin }: { live: DessSnapshot | n
                   />
                 </div>
                 <BatteryPerformance reports={reports} settings={settings} range={range} />
+                <BatteryInsights
+                  reserve={settings.threshold}
+                  chargedKwh={reports.year.batteryChargeKwh}
+                  dischargedKwh={reports.year.batteryDischargeKwh}
+                />
               </div>
             )}
           </>
@@ -1139,7 +1147,19 @@ export function SolarDashboard({ live, settings, pin }: { live: DessSnapshot | n
         )}
         {tab === 'costs' && (
           <>
-            {reports && <BillingSavings reports={reports} settings={settings} />}
+            {reports && (
+              <>
+                <BillOutlook
+                  gridKwh={
+                    reports.savings.cycles.length ? reports.savings.cycles.reduce((n, c) => n + c.gridKwh, 0) : null
+                  }
+                  from={reports.savings.from}
+                />
+                <BillingSavings reports={reports} settings={settings} />
+                <Baseload rate={unprotectedRate(reports.savings.cycles.reduce((n, c) => n + c.gridKwh, 0))} />
+                <SolarYield buckets={reports.calendar} />
+              </>
+            )}
             <Suspense fallback={<LoadingCards label="Loading appliance report" />}>
               <ReportScreen />
             </Suspense>

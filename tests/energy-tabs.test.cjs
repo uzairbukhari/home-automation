@@ -458,3 +458,114 @@ test('grid rollup is stored from raw fields and served by the owner-only route',
     sqlite.close();
   }
 });
+
+test('battery insights bin charge levels, count reserve days and compute round-trip efficiency', () => {
+  const { socBins, reserveHits, fullDays, roundTrip, batteryInsightVerdict } = require('../lib/battery-insights.ts');
+  const hoursAt = (levels) => {
+    const arr = Array(101).fill(0);
+    for (const [level, h] of Object.entries(levels)) arr[Number(level)] = h;
+    return arr;
+  };
+  const days = [
+    { date: '2026-03-01', socMin: 18, socMax: 100, socHours: hoursAt({ 18: 1, 55: 10, 100: 5 }) },
+    { date: '2026-03-02', socMin: 40, socMax: 97, socHours: hoursAt({ 40: 4, 97: 6 }) },
+  ];
+  const bins = socBins(days);
+  assert.equal(bins.length, 10);
+  assert.equal(bins[1].hours, 1);
+  assert.equal(bins[5].hours, 10);
+  assert.equal(bins[9].hours, 11);
+  const hits = reserveHits(days, 20);
+  assert.equal(hits.daysHit, 1);
+  assert.equal(hits.hours, 1);
+  assert.equal(fullDays(days), 1);
+  assert.equal(roundTrip(100, 92), 92);
+  assert.equal(roundTrip(5, 4), null);
+  assert.equal(roundTrip(100, 20), null);
+  assert.ok(batteryInsightVerdict(days, 20, hits, 30).includes('1 of 2 days'));
+  assert.equal(batteryInsightVerdict([], 20, { hours: 0, daysHit: 0 }, 30), null);
+});
+test('battery insights route returns stored daily charge levels for the owner only', async () => {
+  const { database, auth } = require('./helpers.cjs'),
+    { sqlite } = database(),
+    oldUser = auth.user;
+  const { saveSnapshot } = require('../lib/solar-store.ts'),
+    { localDate, shiftDate } = require('../lib/measurements.ts');
+  const day = shiftDate(localDate(), -1);
+  auth.user = { userId: 'insight-fixture' };
+  try {
+    await saveSnapshot({
+      device: { serial: 'insight-fixture', name: 'Fixture', collector: 'test', mode: 'Battery mode' },
+      updatedAt: new Date().toISOString(),
+      readings: [{ metric: 'battery_soc', value: 50, quality: 'good' }],
+      series: [],
+    });
+    const socHours = Array(101).fill(0);
+    socHours[30] = 5;
+    sqlite
+      .prepare(
+        "INSERT INTO telemetry_summaries(source,entity_id,granularity,period,room,data,updated_at,calculation_version) VALUES ('dessmonitor','insight-fixture','day',?,'',?,?,3)",
+      )
+      .run(
+        day,
+        JSON.stringify({ metrics: { battery: { min: 22, max: 91 } }, hours: [], socHours }),
+        new Date().toISOString(),
+      );
+    const body = await (
+      await require('../app/api/solar/battery-insights/route.ts').GET(
+        new Request('http://localhost/api/solar/battery-insights?days=7'),
+      )
+    ).json();
+    assert.equal(body.days.length, 1);
+    assert.equal(body.days[0].socMin, 22);
+    assert.equal(body.days[0].socHours[30], 5);
+    auth.user = null;
+    assert.equal(
+      (await require('../app/api/solar/battery-insights/route.ts').GET(new Request('http://localhost/x'))).status,
+      401,
+    );
+  } finally {
+    auth.user = oldUser;
+    sqlite.close();
+  }
+});
+
+test('cost insights project the bill, find the slab edge, baseload and yield per kW', () => {
+  const { billForecast, billVerdict, cycleEnd, baseload, yieldSeries, yieldVerdict } = require('../lib/costs.ts');
+  assert.equal(cycleEnd('2026-03-05'), '2026-04-04');
+  assert.equal(cycleEnd('2026-12-01'), '2026-12-31');
+  const f = billForecast(90, '2026-03-01', '2026-03-10');
+  assert.equal(f.elapsedDays, 10);
+  assert.equal(f.cycleDays, 31);
+  assert.ok(Math.abs(f.projectedKwh - 279) < 1e-9);
+  assert.equal(f.rate, 33.1);
+  assert.equal(f.slabMax, 300);
+  assert.equal(f.crossesNext, false);
+  const near = billForecast(95, '2026-03-01', '2026-03-10');
+  assert.equal(near.crossesNext, true);
+  assert.ok(billVerdict(near).includes('300-unit limit'));
+  assert.equal(billForecast(null, '2026-03-01', '2026-03-10'), null);
+  const top = billForecast(800, '2026-03-01', '2026-03-10');
+  assert.equal(top.slabMax, null);
+  assert.ok(billVerdict(top).includes('top slab'));
+  assert.equal(baseload([{ home: [100, 200] }]), null);
+  const floor = baseload([{ home: Array.from({ length: 24 }, (_, h) => 200 + h * 100) }]);
+  assert.equal(floor.watts, 800);
+  assert.equal(Math.round(floor.kwhPerMonth), 576);
+  const points = yieldSeries(
+    [
+      { date: '2026-03-08', solar: 18 },
+      { date: '2026-03-09', solar: 7.2 },
+      { date: '2026-03-10', solar: 14.4 },
+      { date: '2026-03-11', solar: null },
+      { date: '2025-01-01', solar: 10 },
+    ],
+    '2026-03-11',
+  );
+  assert.deepEqual(
+    points.map((p) => p.kwhPerKw),
+    [5, 2, 4],
+  );
+  assert.ok(yieldVerdict(points).includes('best 5.0'));
+  assert.equal(yieldVerdict(points.slice(0, 2)), null);
+});
