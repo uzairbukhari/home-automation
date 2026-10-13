@@ -24,3 +24,14 @@ test('poll waits for the next collection but never under a minute',()=>{
  assert.equal(nextPollDelay('2026-10-12T10:04:50Z',now),60_000);
  assert.equal(nextPollDelay(null,now),60_000);
 });
+test('battery statistics count cycles, warranty use and estimate health from deep days',()=>{
+ const {batteryStats}=require('../lib/battery-stats.ts');
+ const day=(i,c,d,s,e)=>({date:'2026-10-0'+i,coveredHours:23,partial:false,chargedKwh:c,dischargedKwh:d,homeKwh:5,directSolarKwh:2,inverterGridKwh:1,socMin:Math.min(s,e),socMax:Math.max(s,e),socStart:s,socEnd:e,peakSolarW:1500,meterGridKwh:1.2});
+ const stats=batteryStats([day(1,4,3,40,60),day(2,5,3,30,70),day(3,3,2.5,50,60),day(4,4.5,3,30,70)],5.2);
+ assert.equal(stats.trackedDays,4);
+ assert.ok(Math.abs(stats.cycles-11.5/5.2)<1e-9);
+ assert.ok(stats.cyclesRemaining<3000&&stats.cyclesRemaining>2990);
+ assert.equal(stats.health.samples,3);
+ assert.ok(stats.health.pct>0&&stats.health.pct<=100);
+ assert.equal(batteryStats([day(1,4,3,40,60)],5.2).health,null);
+});
