@@ -337,7 +337,8 @@ function PowerHistory({ live, pin }: { live: DessSnapshot | null; pin: Pin }) {
 function ChargeHistory({ settings, pin }: { settings: Settings; pin: Pin }) {
   const [range, setRange] = useUrlState('chargePeriod', '24h', ['24h', '48h', '7d', '30d']),
     history = useHistory(range),
-    chart = withGaps(history.data?.series ?? []);
+    // The week and month ranges come as hourly averages, so a gap is anything over an hour and a quarter.
+    chart = withGaps(history.data?.series ?? [], range === '7d' || range === '30d' ? 4500000 : 900000);
   return (
     <Card className="panel soc-card">
       <ChartHeading id="soc-history" title="State of charge" eyebrow="Battery history" pin={pin}>

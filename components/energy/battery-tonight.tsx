@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react';
 import { MoonStar } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { readJson } from '@/lib/client-data';
-import { batteryTonight, tonightVerdict, type TypicalHour } from '@/lib/energy-insights';
+import { batteryTonight, tonightVerdict, typicalFromHeatmap, type TypicalHour } from '@/lib/energy-insights';
 import { localTime } from '@/lib/measurements';
+import type { HeatmapDay } from '@/lib/trends';
 import type { DessSnapshot } from '@/lib/providers/dessmonitor';
 
 /** Whether the charge above reserve covers the shortfall between sunset and sunrise at the user's typical use. */
@@ -21,8 +22,9 @@ export function BatteryTonight({
     soc = live?.readings.find((r) => r.metric === 'battery_soc')?.value ?? null;
   useEffect(() => {
     let active = true;
-    readJson<{ typicalDay?: TypicalHour[] | null }>('/api/reports?range=month')
-      .then((data) => active && setTypical(data.typicalDay ?? []))
+    // Shares the heatmap card's request instead of loading a whole report just for the typical day.
+    readJson<{ days: HeatmapDay[] }>('/api/solar/heatmap?days=30')
+      .then((data) => active && setTypical(typicalFromHeatmap(data.days) ?? []))
       .catch(() => active && setTypical([]));
     return () => {
       active = false;

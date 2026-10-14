@@ -32,6 +32,13 @@ export function solarBucketVerdict(buckets: Bucket[], unit: 'day' | 'month' | 'y
 }
 
 export type TypicalHour = { hour: number; homeW: number | null; solarW: number | null };
+
+/** A typical day from the hour-by-hour heatmap: each hour's home and solar power averaged over the days that have a value for it. Null when there are no days. */
+export function typicalFromHeatmap(days: Array<{ home: Array<number | null>; solar: Array<number | null> }>): TypicalHour[] | null {
+  if (!days.length) return null;
+  const mean = (values: Array<number | null | undefined>) => { const present = values.filter((n): n is number => typeof n === 'number'); return present.length ? present.reduce((a, b) => a + b, 0) / present.length : null; };
+  return Array.from({ length: 24 }, (_, hour) => ({ hour, homeW: mean(days.map((d) => d.home[hour])), solarW: mean(days.map((d) => d.solar[hour])) }));
+}
 export type TonightForecast = {
   needKwh: number;
   usableKwh: number;
