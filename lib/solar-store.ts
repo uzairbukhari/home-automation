@@ -4,6 +4,7 @@ import { DessMonitorProvider, type DessSnapshot, type ProviderPeriods } from './
 import { energyReport, sortedPoints, type SolarPoint, type EnergyBucket, type EnergyReport } from './solar-energy';
 import { localDate, shiftDate } from './measurements';
 import { summarizeSolarDay } from './telemetry';
+import { inverterDay, storableDay, writeDayStats, type InverterDay } from './day-inverter';
 
 function db(){if(!appDb())throw new Error('Solar history storage is unavailable');return appDb();}
 async function batch(statements:DbStatement[]){for(let i=0;i<statements.length;i+=80)await db().batch(statements.slice(i,i+80));}
@@ -19,10 +20,14 @@ export async function saveSamples(entityId:string,points:SolarPoint[]){
  const changed=sorted.filter(point=>known.get(point.sourceTimestamp)!==JSON.stringify(point));
  await batch(changed.map(point=>db().prepare('INSERT INTO solar_samples (entity_id,source_timestamp,data) VALUES (?,?,?) ON CONFLICT(entity_id,source_timestamp) DO UPDATE SET data=excluded.data').bind(entityId,point.sourceTimestamp,JSON.stringify(point))));
  const dates=new Set(changed.map(p=>localDate(p.sourceTimestamp)));
+ const finished:InverterDay[]=[];
  for(const date of dates){
   const full=await storedSamples(entityId,date,date),report=actualSolarReport(energyReport(full)),partial=report.partial||report.coveredHours<(date===localDate()?elapsedToday():23.5);
   await db().prepare(`INSERT INTO solar_energy_periods (entity_id,period_type,period,solar_kwh,grid_kwh,home_kwh,solar_source,grid_source,covered_hours,partial,report_json) VALUES (?,'day',?,?,?,?,?,?,?,?,?) ON CONFLICT(entity_id,period_type,period) DO UPDATE SET solar_kwh=CASE WHEN solar_energy_periods.solar_source LIKE 'provider:%' THEN solar_energy_periods.solar_kwh ELSE excluded.solar_kwh END,grid_kwh=CASE WHEN solar_energy_periods.grid_source LIKE 'provider:%' THEN solar_energy_periods.grid_kwh ELSE excluded.grid_kwh END,home_kwh=excluded.home_kwh,solar_source=CASE WHEN solar_energy_periods.solar_source LIKE 'provider:%' THEN solar_energy_periods.solar_source ELSE excluded.solar_source END,grid_source=CASE WHEN solar_energy_periods.grid_source LIKE 'provider:%' THEN solar_energy_periods.grid_source ELSE excluded.grid_source END,covered_hours=excluded.covered_hours,partial=excluded.partial,report_json=excluded.report_json,updated_at=CURRENT_TIMESTAMP`).bind(entityId,date,report.solarKwh,report.gridKwh,report.homeKwh,report.solarSource,report.gridKwh===null?'missing':'integrated',report.coveredHours,partial?1:0,JSON.stringify({...report,partial})).run();
+  // The finished day's per-day statistics are stored once, so reports read one row instead of integrating the day's readings.
+  const day=inverterDay(date,full);if(storableDay(day,full.length))finished.push(day);
  }
+ await writeDayStats(db(),entityId,finished);
  for(const date of dates)await summarizeSolarDay(entityId,date);
  if(dates.size)await rebuildPeriods(entityId);
  return changed.length;

@@ -16,6 +16,7 @@ import { reconcileCommands } from './commands';
 import { evaluateAlerts } from './notifications';
 import { localDate, shiftDate } from './measurements';
 import { gridRollupStep } from './grid-stats';
+import { dayStatBackfillStep } from './day-stats';
 import { repairActualEnergyStep, rebuildLongPeriods, retentionStep, summarizeTuyaDay } from './telemetry';
 
 async function connection(provider:string,ok:boolean,error?:string){await database().prepare('INSERT INTO connection_state(provider,status,last_success_at,last_error_code,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(provider) DO UPDATE SET status=excluded.status,last_success_at=COALESCE(excluded.last_success_at,connection_state.last_success_at),last_error_code=excluded.last_error_code,updated_at=excluded.updated_at').bind(provider,ok?'connected':'degraded',ok?new Date().toISOString():null,error??null,new Date().toISOString()).run();}
@@ -71,6 +72,7 @@ export async function maintainCollection(){
       for(const [id,interval,unit] of [['provider-documents',86400000,documentsUnit],['dessmonitor-alarms',3600000,alarmsUnit],['tuya-events',300000,tuyaEventsUnit]] as const){try{await dueWork(id,interval,unit);}catch{/* Job health and the backfill ledger carry the error; later steps still run. */}}
       await dueWork('retention',3600000,async()=>{const bytes=await storageBytes(),retained=await retentionStep(bytes!==null&&bytes>STORAGE_PRUNE_BYTES);const catalog=await database().prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();for(const c of catalog.results)await rebuildLongPeriods(c.source,c.id);return retained;});
       try{await dueWork('grid-rollup',900000,async()=>{const entity=(await cachedSnapshot(false,false))?.device.serial;return entity?gridRollupStep(entity):{done:[]};});}catch{/* The job row keeps the error; other maintenance still runs. */}
+      try{await dueWork('daystat-backfill',900000,async()=>{const entity=(await cachedSnapshot(false,false))?.device.serial;return entity?dayStatBackfillStep(entity):{done:[]};});}catch{/* The job row keeps the error; other maintenance still runs. */}
       await dueWork('operations-summary',86400000,summarizeOperations);
     }catch(error){throw error;}
 }
