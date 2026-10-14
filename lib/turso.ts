@@ -48,10 +48,15 @@ export function createTursoDatabase(config: TursoConfig): Db {
   const base = config.url.replace(/^libsql:\/\//, 'https://').replace(/^wss?:\/\//, 'https://').replace(/\/+$/, '');
   const doFetch = config.fetch ?? fetch;
   // Visible through /api/admin/collect-debug so the database traffic of a run can be inspected.
-  const stats = { httpRequests: 0 };
+  const stats = { httpRequests: 0, totalMs: 0 };
 
+  // Cumulative wall-clock time spent inside send() (retries included); concurrent calls overlap, so it can exceed elapsed time.
   async function send(request: HranaRequest): Promise<unknown> {
     stats.httpRequests++;
+    const started = Date.now();
+    try { return await sendOnce(request); } finally { stats.totalMs += Date.now() - started; }
+  }
+  async function sendOnce(request: HranaRequest): Promise<unknown> {
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {

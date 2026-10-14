@@ -1,3 +1,4 @@
+import { serverTiming } from '@/lib/server-timing';
 import { after } from 'next/server';
 import { database,dueWork } from '@/lib/jobs';
 import { DessMonitorProvider } from '@/lib/providers/dessmonitor';
@@ -9,6 +10,7 @@ import { savedSettings } from '@/lib/settings-store';
 import { billingCycle,directSolarSavings } from '@/lib/tariff';
 import { dayStats,sumDays,type DayStat } from '@/lib/day-stats';
 export async function GET(request:Request){
+ const timing=serverTiming();
  const user=await getOwnerUser();if(!user)return Response.json({error:'Unauthorized'},{status:401});
  try{
   const current=localDate(),url=new URL(request.url),year=url.searchParams.get('year')??current.slice(0,4),settings=await savedSettings(user.userId),threshold=Number(url.searchParams.get('threshold')??settings.threshold);
@@ -43,6 +45,6 @@ export async function GET(request:Request){
   const overlay=(report:typeof today,days:DayStat[])=>{const t=sumDays(days),grid=days.map(gridOf).filter((n):n is number=>n!==null);report.homeKwh=t.homeKwh;report.directSolarKwh=t.directSolarKwh;report.batteryChargeKwh=t.chargedKwh;report.batteryDischargeKwh=t.dischargedKwh;report.gridKwh=grid.length?grid.reduce((a,b)=>a+b,0):null;};
   overlay(today,statDays.filter(d=>d.date===current));overlay(month,statDays.filter(d=>d.date.startsWith(current.slice(0,7))));overlay(annual,statDays.filter(d=>d.date.startsWith(currentYear)));
   const fillGrid=<T extends {date:string;grid:number|null;home:number|null;gridSource:string}>(buckets:T[])=>buckets.map(b=>{const days=statDays.filter(d=>d.date.startsWith(b.date)),grid=days.map(gridOf).filter((n):n is number=>n!==null),home=days.map(d=>d.homeKwh).filter((n):n is number=>n!==null);return{...b,grid:grid.length?grid.reduce((a,c)=>a+c,0):b.grid,gridSource:grid.length?(meter?'meter':'inverter'):b.gridSource,home:home.length?home.reduce((a,c)=>a+c,0):b.home};});
-  return Response.json({refreshing,production:{today:today.solarKwh,month:month.solarKwh,year:annual.solarKwh,lifetime:snapshot.readings.find(r=>r.metric==='solar_total')?.value??null},today,month,year:annual,daily:asBuckets(monthDays),calendar:fillGrid(asBuckets(days)),buckets:{daily:fillGrid(asBuckets(weekDays)),monthly:fillGrid(calendarMonths(months,year)),yearly:fillGrid(asBuckets(years))},gridMeter:meter?.name??null,selectedYear:year,availableYears:years.map(d=>d.date),savings:{...savings,from:cycleStart,to:current},previousCycles,updatedAt:snapshot.updatedAt,unit:'kWh',timeZone:'Asia/Karachi',collection:await collectionHealth(),warnings:errors,diagnostics:{annualSource:reportedYear?.source??'missing',periodJobs,providerYear,monthlyTotal,monthlyDifference:providerYear===null?null:providerYear-monthlyTotal}},{headers:{'cache-control':'private, no-store'}});
+  return Response.json({refreshing,production:{today:today.solarKwh,month:month.solarKwh,year:annual.solarKwh,lifetime:snapshot.readings.find(r=>r.metric==='solar_total')?.value??null},today,month,year:annual,daily:asBuckets(monthDays),calendar:fillGrid(asBuckets(days)),buckets:{daily:fillGrid(asBuckets(weekDays)),monthly:fillGrid(calendarMonths(months,year)),yearly:fillGrid(asBuckets(years))},gridMeter:meter?.name??null,selectedYear:year,availableYears:years.map(d=>d.date),savings:{...savings,from:cycleStart,to:current},previousCycles,updatedAt:snapshot.updatedAt,unit:'kWh',timeZone:'Asia/Karachi',collection:await collectionHealth(),warnings:errors,diagnostics:{annualSource:reportedYear?.source??'missing',periodJobs,providerYear,monthlyTotal,monthlyDifference:providerYear===null?null:providerYear-monthlyTotal}},{headers:{'cache-control':'private, no-store',...timing.headers()}});
  }catch(error){return Response.json({error:error instanceof Error?error.message:'Reports are unavailable'},{status:502})}
 }
