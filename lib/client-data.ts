@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 // Share in-flight reads only. Private responses remain owned by the account-aware worker.
 const pending=new Map<string,Promise<unknown>>();
 const commands=new Set<string>();
@@ -5,6 +6,22 @@ const commands=new Set<string>();
 const remembered=new Map<string,unknown>();
 export const recall=<T,>(key:string):T|undefined=>typeof window==='undefined'?undefined:remembered.get(key) as T|undefined;
 export const remember=<T,>(key:string,value:T)=>{remembered.set(key,value);return value;};
+// Every successful GET through readJson is remembered by URL, so a card that opens again (another tab, a revisit) shows the last response at once and refreshes behind it.
+const jsonKey=(url:string)=>'json:'+url;
+export const cachedJson=<T,>(url:string)=>recall<T>(jsonKey(url));
+/** Stale-while-revalidate read: the remembered response for the URL straight away (if any), replaced when the fresh one arrives. A failed refresh keeps the old data and reports the error. */
+export function useJson<T>(url:string|null,fallbackError='Unable to load data'):{data:T|undefined;error:string} {
+ const [state,setState]=useState<{url:string|null;data:T|undefined;error:string}>(()=>({url,data:url?cachedJson<T>(url):undefined,error:''}));
+ useEffect(()=>{
+  if(!url)return;
+  let active=true;
+  readJson<T>(url).then(data=>{if(active)setState({url,data,error:''});}).catch(reason=>{if(active)setState(previous=>({url,data:cachedJson<T>(url)??previous.data,error:reason instanceof Error?reason.message:fallbackError}));});
+  return()=>{active=false;};
+ },[url,fallbackError]);
+ // While a new URL loads, show what it remembers, else what was on screen before.
+ if(state.url===url)return{data:state.data,error:state.error};
+ return{data:(url?cachedJson<T>(url):undefined)??state.data,error:''};
+}
 export async function sendDeviceCommand(deviceId:string,code:string,value:unknown) {
  if(commands.has(deviceId))throw new Error('A command is already in progress for this device.');
  commands.add(deviceId);
@@ -17,7 +34,7 @@ export async function sendDeviceCommand(deviceId:string,code:string,value:unknow
 }
 export function readJson<T>(url:string):Promise<T> {
  const hit=pending.get(url);if(hit)return hit as Promise<T>;
- const request=fetch(url,{cache:'no-store'}).then(async response=>{const body=await response.json() as T & {error?:string};if(!response.ok)throw new Error(body.error||'Unable to load data');return body;}).finally(()=>pending.delete(url));
+ const request=fetch(url,{cache:'no-store'}).then(async response=>{const body=await response.json() as T & {error?:string};if(!response.ok)throw new Error(body.error||'Unable to load data');return remember(jsonKey(url),body);}).finally(()=>pending.delete(url));
  pending.set(url,request);return request;
 }
 export function foregroundPoll(refresh:()=>void,milliseconds:number) {

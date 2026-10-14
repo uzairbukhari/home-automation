@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -15,7 +15,7 @@ import {
 import { ChartCard } from './chart-card';
 import { RangePicker } from './range-picker';
 import { chartTick, chartTooltip, tooltipTrigger } from '@/lib/chart-theme';
-import { readJson } from '@/lib/client-data';
+import { useJson } from '@/lib/client-data';
 import { gridTotals, gridVerdict, VOLTAGE_BANDS, type GridDay } from '@/lib/grid-math';
 
 const SPANS = [
@@ -39,22 +39,8 @@ const duration = (minutes: number) =>
 /** Power cuts, voltage quality and what the battery carried, from the inverter's own grid readings. */
 export function GridHealth() {
   const [span, setSpan] = useState<(typeof SPANS)[number][0]>('30'),
-    [days, setDays] = useState<GridDay[] | null>(null),
-    [error, setError] = useState('');
-  useEffect(() => {
-    let active = true;
-    readJson<{ days: GridDay[] }>(`/api/solar/grid?days=${span}`)
-      .then((data) => {
-        if (active) {
-          setDays(data.days);
-          setError('');
-        }
-      })
-      .catch((e) => active && setError(e instanceof Error ? e.message : 'Grid data is unavailable'));
-    return () => {
-      active = false;
-    };
-  }, [span]);
+    { data, error } = useJson<{ days: GridDay[] }>(`/api/solar/grid?days=${span}`, 'Grid data is unavailable'),
+    days = data?.days ?? null;
   const list = days ?? [],
     totals = gridTotals(list),
     log = list

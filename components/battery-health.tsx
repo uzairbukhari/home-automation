@@ -1,9 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { BatteryCharging, HeartPulse, Hourglass, Repeat2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { readJson } from '@/lib/client-data';
+import { useJson } from '@/lib/client-data';
 import type { BatteryStats } from '@/lib/day-stats';
 import type { EnergyReport } from '@/lib/solar-energy';
 
@@ -15,12 +14,7 @@ function Tile({ icon: Icon, label, value, unit, note, children }: { icon: typeof
 }
 
 export function BatteryHealth({ report, rangeLabel, capacity, reserve }: { report?: EnergyReport; rangeLabel: string; capacity: number; reserve: number }) {
-  const [stats, setStats] = useState<BatteryStats | null>(null), [error, setError] = useState('');
-  useEffect(() => {
-    let active = true;
-    readJson<BatteryStats & { error?: string }>('/api/solar/battery').then(data => { if (active) setStats(data); }).catch(e => { if (active) setError(e instanceof Error ? e.message : 'Battery statistics are unavailable'); });
-    return () => { active = false; };
-  }, []);
+  const { data: stats = null, error } = useJson<BatteryStats & { error?: string }>('/api/solar/battery', 'Battery statistics are unavailable');
   const health = stats?.health, used = stats?.warrantyUsedPct ?? null;
   return (
     <Card className="system-report-card battery-health-card">

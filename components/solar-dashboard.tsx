@@ -19,7 +19,7 @@ import {
 } from 'recharts';
 import { ArrowLeft, Expand } from 'lucide-react';
 import { useUrlState } from '@/hooks/use-app-navigation';
-import { readJson, foregroundPoll } from '@/lib/client-data';
+import { readJson, foregroundPoll, cachedJson } from '@/lib/client-data';
 import { Activity, CalendarDays, CloudOff, Grid3X3, SunMedium, TrendingUp } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -999,9 +999,12 @@ export function SolarDashboard({ live, settings, pin }: { live: DessSnapshot | n
       );
   }, [tab]);
   const needsReports = REPORT_TABS.includes(tab),
-    [reports, setReports] = useState<ReportsSnapshot | null>(null),
+    // The settings object is replaced when /api/settings answers; only the reserve it carries changes the request.
+    threshold = settings.threshold,
+    reportsUrl = `/api/solar/reports?year=${year}&weekEnd=${weekEnd}&threshold=${threshold}`,
+    [reports, setReports] = useState<ReportsSnapshot | null>(() => cachedJson<ReportsSnapshot>(reportsUrl) ?? null),
     [error, setError] = useState(''),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(() => !cachedJson(reportsUrl));
   useEffect(() => {
     if (!needsReports) return;
     const controller = new AbortController();
@@ -1017,9 +1020,7 @@ export function SolarDashboard({ live, settings, pin }: { live: DessSnapshot | n
     async function refresh() {
       setLoading(true);
       try {
-        const data = await readJson<ReportsSnapshot & { error?: string; refreshing?: boolean }>(
-          `/api/solar/reports?year=${year}&weekEnd=${weekEnd}&threshold=${settings.threshold}`,
-        );
+        const data = await readJson<ReportsSnapshot & { error?: string; refreshing?: boolean }>(reportsUrl);
         if (controller.signal.aborted) return;
         setReports(data);
         follow(data.refreshing);
@@ -1036,7 +1037,7 @@ export function SolarDashboard({ live, settings, pin }: { live: DessSnapshot | n
       clearTimeout(retry);
       stop();
     };
-  }, [needsReports, year, weekEnd, settings]);
+  }, [needsReports, reportsUrl]);
   if (entity)
     return <EnergyDetail key={entity} entity={entity} onClose={() => setEntity('')} live={live} settings={settings} />;
   const unavailable = needsReports && !reports;
