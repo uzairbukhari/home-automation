@@ -35,3 +35,9 @@ test('battery statistics count cycles, warranty use and estimate health from dee
  assert.ok(stats.health.pct>0&&stats.health.pct<=100);
  assert.equal(batteryStats([day(1,4,3,40,60)],5.2).health,null);
 });
+test('battery statistics ignore days before the battery was installed',()=>{
+ const {batteryStats}=require('../lib/battery-stats.ts');
+ const day=(date,d)=>({date,coveredHours:23,partial:false,chargedKwh:d,dischargedKwh:d,homeKwh:5,directSolarKwh:2,inverterGridKwh:1,socMin:20,socMax:90,socStart:30,socEnd:80,peakSolarW:1500,meterGridKwh:1});
+ const stats=batteryStats([day('2026-07-30',500),day('2026-08-07',500),day('2026-08-08',5.2),day('2026-08-09',5.2)],5.2,'2026-08-08');
+ assert.equal(stats.trackedDays,2);assert.equal(stats.since,'2026-08-08');assert.ok(Math.abs(stats.cycles-2)<1e-9);
+});
