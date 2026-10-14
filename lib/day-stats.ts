@@ -7,7 +7,7 @@ import { counterDaily, gridMeter, type Meter } from './meter-history';
 export type { Meter };
 import type { DailySummary } from './telemetry';
 import { type DayStat } from './battery-stats';
-export { sumDays, batteryStats, WARRANTY_CYCLES, type DayStat, type BatteryStats } from './battery-stats';
+export { sumDays, batteryStats, WARRANTY_CYCLES, BATTERY_INSTALLED, type DayStat, type BatteryStats } from './battery-stats';
 
 const cache = new Map<string, DayStat>();
 

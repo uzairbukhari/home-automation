@@ -14,6 +14,8 @@ export const sumDays = (days: DayStat[]) => ({
 });
 
 export const WARRANTY_CYCLES = 3000;
+/** The battery was bought and installed on this date; readings from before it are not this battery's. */
+export const BATTERY_INSTALLED = '2026-08-08';
 const EFFICIENCY = 0.97; // one-way LiFePO4 conversion, applied to terminal energy to estimate energy stored
 
 export type BatteryStats = {
@@ -25,8 +27,8 @@ export type BatteryStats = {
   daily: Array<{ date: string; chargedKwh: number | null; dischargedKwh: number | null; cycles: number | null; socMin: number | null; socMax: number | null }>;
 };
 
-export function batteryStats(days: DayStat[], capacityKwh: number): BatteryStats {
-  const used = days.filter(d => d.dischargedKwh !== null || d.chargedKwh !== null);
+export function batteryStats(days: DayStat[], capacityKwh: number, installed = BATTERY_INSTALLED): BatteryStats {
+  const used = days.filter(d => d.date >= installed && (d.dischargedKwh !== null || d.chargedKwh !== null));
   const charged = sum(used.map(d => d.chargedKwh)), discharged = sum(used.map(d => d.dischargedKwh)), cycles = discharged === null ? null : discharged / capacityKwh;
   const recent = used.slice(-30), recentDischarged = sum(recent.map(d => d.dischargedKwh)), cyclesLast30 = recentDischarged === null ? null : recentDischarged / capacityKwh;
   const cyclesPerDay = cyclesLast30 === null || !recent.length ? null : cyclesLast30 / recent.length;
