@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -16,7 +16,7 @@ import {
 import { ChartCard } from './chart-card';
 import { RangePicker } from './range-picker';
 import { SERIES, chartTick, chartTooltip, tooltipTrigger } from '@/lib/chart-theme';
-import { readJson } from '@/lib/client-data';
+import { useJson } from '@/lib/client-data';
 import type { GridDay } from '@/lib/grid-math';
 import { batteryInsightVerdict, fullDays, reserveHits, roundTrip, socBins, type SocDay } from '@/lib/battery-insights';
 
@@ -39,22 +39,8 @@ export function BatteryInsights({
   dischargedKwh: number | null | undefined;
 }) {
   const [span, setSpan] = useState<(typeof SPANS)[number][0]>('30'),
-    [days, setDays] = useState<SocDay[] | null>(null),
-    [error, setError] = useState('');
-  useEffect(() => {
-    let active = true;
-    readJson<{ days: SocDay[] }>(`/api/solar/battery-insights?days=${span}`)
-      .then((data) => {
-        if (active) {
-          setDays(data.days);
-          setError('');
-        }
-      })
-      .catch((e) => active && setError(e instanceof Error ? e.message : 'Battery data is unavailable'));
-    return () => {
-      active = false;
-    };
-  }, [span]);
+    { data, error } = useJson<{ days: SocDay[] }>(`/api/solar/battery-insights?days=${span}`, 'Battery data is unavailable'),
+    days = data?.days ?? null;
   const list = days ?? [],
     bins = socBins(list),
     hits = reserveHits(list, reserve),
@@ -168,16 +154,8 @@ export function BatteryInsights({
 
 /** How hard the inverter works: peak load, time above 80% load and how hot it runs. */
 export function InverterStrain() {
-  const [days, setDays] = useState<GridDay[] | null>(null);
-  useEffect(() => {
-    let active = true;
-    readJson<{ days: GridDay[] }>('/api/solar/grid?days=30')
-      .then((data) => active && setDays(data.days))
-      .catch(() => active && setDays([]));
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { data, error } = useJson<{ days: GridDay[] }>('/api/solar/grid?days=30'),
+    days = data?.days ?? (error ? [] : null);
   const rows = (days ?? []).flatMap((d) => (d.inverter ? [{ date: d.date, ...d.inverter }] : []));
   if (!rows.length) return null;
   const peak = Math.max(0, ...rows.map((r) => r.peakLoadPct ?? 0)),

@@ -1,9 +1,9 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ChartCard } from './chart-card';
 import { RangePicker } from './range-picker';
 import { SERIES, heatColor } from '@/lib/chart-theme';
-import { readJson } from '@/lib/client-data';
+import { useJson } from '@/lib/client-data';
 import { peakHour, type HeatmapDay, type HeatmapMetric } from '@/lib/trends';
 
 const METRICS = [
@@ -29,22 +29,8 @@ const dateLabel = (date: string) =>
 export function HourHeatmap() {
   const [metric, setMetric] = useState<HeatmapMetric>('home'),
     [span, setSpan] = useState<(typeof SPANS)[number][0]>('30'),
-    [days, setDays] = useState<HeatmapDay[] | null>(null),
-    [error, setError] = useState('');
-  useEffect(() => {
-    let active = true;
-    readJson<{ days: HeatmapDay[] }>(`/api/solar/heatmap?days=${span}`)
-      .then((data) => {
-        if (active) {
-          setDays(data.days);
-          setError('');
-        }
-      })
-      .catch((e) => active && setError(e instanceof Error ? e.message : 'Hourly data is unavailable'));
-    return () => {
-      active = false;
-    };
-  }, [span]);
+    { data, error } = useJson<{ days: HeatmapDay[] }>(`/api/solar/heatmap?days=${span}`, 'Hourly data is unavailable'),
+    days = data?.days ?? null;
   const list = days ?? [],
     max = Math.max(0, ...list.flatMap((d) => d[metric].map((v) => v ?? 0))),
     cell = Math.max(5, Math.min(24, Math.floor(620 / Math.max(1, list.length)))),

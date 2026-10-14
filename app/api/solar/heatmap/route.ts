@@ -1,4 +1,5 @@
 import { database } from '@/lib/jobs';
+import { serverTiming } from '@/lib/server-timing';
 import { getOwnerUser } from '@/lib/owner-auth';
 import { cachedSnapshot } from '@/lib/solar-store';
 import { localDate, shiftDate } from '@/lib/measurements';
@@ -7,6 +8,7 @@ import type { HeatmapDay } from '@/lib/trends';
 
 // Average home, solar and grid power for every hour of each stored day (hourly rollups are kept 90 days).
 export async function GET(request: Request) {
+  const timing = serverTiming();
   const user = await getOwnerUser();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
   try {
@@ -32,7 +34,7 @@ export async function GET(request: Request) {
       });
     return Response.json(
       { from, to, days: series, timeZone: 'Asia/Karachi', unit: 'W' },
-      { headers: { 'cache-control': 'private, no-store' } },
+      { headers: { 'cache-control': 'private, no-store', ...timing.headers() } },
     );
   } catch (error) {
     return Response.json(

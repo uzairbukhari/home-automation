@@ -1,15 +1,13 @@
 import { database } from './jobs';
 import { actualSummary } from './actual-energy';
 import { localDate, shiftDate } from './measurements';
-import { energyReport, sortedPoints, type SolarPoint } from './solar-energy';
+import { inverterDay, storableDay, storedDayStats, writeDayStats, type InverterDay } from './day-inverter';
 import { storedSamples } from './solar-store';
 import { counterDaily, gridMeter, type Meter } from './meter-history';
 export type { Meter };
 import type { DailySummary } from './telemetry';
 import { type DayStat } from './battery-stats';
 export { sumDays, batteryStats, WARRANTY_CYCLES, BATTERY_INSTALLED, type DayStat, type BatteryStats } from './battery-stats';
-
-const cache = new Map<string, DayStat>();
 
 /** Daily kWh: the meter's cumulative register first (immune to sparse reporting), then the per-day summaries for days it does not cover. */
 export async function meterDaily(meter: Meter, from: string, to: string) {
@@ -32,32 +30,40 @@ export async function firstSampleDate(entity: string) {
   return row?.stamp ? localDate(row.stamp) : null;
 }
 
-function inverterDay(date: string, points: SolarPoint[]): Omit<DayStat, 'meterGridKwh'> {
-  const sorted = sortedPoints(points), report = energyReport(sorted), soc = sorted.map(p => p.battery).filter((n): n is number => n !== null && n >= 0 && n <= 100);
-  return {
-    date, coveredHours: report.coveredHours, partial: report.coveredHours < (date === localDate() ? 1 : 20),
-    chargedKwh: report.batteryChargeKwh, dischargedKwh: report.batteryDischargeKwh, homeKwh: report.homeKwh, directSolarKwh: report.directSolarKwh, inverterGridKwh: report.gridKwh,
-    socMin: report.socMin, socMax: report.socMax, socStart: soc[0] ?? null, socEnd: soc.at(-1) ?? null, peakSolarW: report.peakSolarW,
-  };
-}
+const missingBatch = 6;
 
-/** Per-day statistics for [from,to]. Finished days are cached for the life of the server instance; today is always recomputed. */
+/**
+ * Per-day statistics for [from,to]. Finished days are read from one stored row each (written when readings are saved);
+ * today and any day without a row are integrated from the stored readings, and finished ones are stored for the next request.
+ */
 export async function dayStats(entity: string, from: string, to: string): Promise<{ days: DayStat[]; meter: Meter | null }> {
-  const today = localDate(), first = await firstSampleDate(entity), start = first && first > from ? first : from, meter = await gridMeter().catch(() => null);
-  const dates: string[] = [];
+  const today = localDate(), [first, meter, stored] = await Promise.all([firstSampleDate(entity), gridMeter().catch(() => null), storedDayStats(database(), entity, from, to)]);
+  const start = first && first > from ? first : from, dates: string[] = [];
   for (let d = start; d <= to; d = shiftDate(d, 1)) dates.push(d);
-  const inverter = new Map<string, Omit<DayStat, 'meterGridKwh'>>();
-  const missing = dates.filter(d => d === today || !cache.has(entity + d));
-  for (let i = 0; i < missing.length; i += 6) await Promise.all(missing.slice(i, i + 6).map(async d => {
-    const day = inverterDay(d, await storedSamples(entity, d, d));
-    if (d !== today && day.coveredHours >= 20) cache.set(entity + d, { ...day, meterGridKwh: null });
+  const inverter = new Map<string, InverterDay>(), fresh: InverterDay[] = [];
+  for (const d of dates) if (d !== today && stored.has(d)) inverter.set(d, stored.get(d)!);
+  const missing = dates.filter(d => !inverter.has(d));
+  for (let i = 0; i < missing.length; i += missingBatch) await Promise.all(missing.slice(i, i + missingBatch).map(async d => {
+    const points = await storedSamples(entity, d, d), day = inverterDay(d, points);
+    if (storableDay(day, points.length, today)) fresh.push(day);
     inverter.set(d, day);
   }));
+  if (fresh.length) await writeDayStats(database(), entity, fresh).catch(() => { /* the next request computes them again */ });
   const grid = meter && dates.length ? await meterDaily(meter, start, to).catch(() => new Map<string, number>()) : new Map<string, number>();
-  const days = dates.map(d => {
-    const base = inverter.get(d) ?? cache.get(entity + d)!;
-    return { ...base, meterGridKwh: grid.get(d) ?? null };
-  });
+  const days = dates.map(d => ({ ...inverter.get(d)!, meterGridKwh: grid.get(d) ?? null }));
   return { days, meter };
 }
 
+/** Maintenance: store the finished days that have no row yet, newest first, a few per run. Days without readings are skipped. */
+export async function dayStatBackfillStep(entity: string, backfill = 5) {
+  const today = localDate(), first = await firstSampleDate(entity);
+  if (!first) return { done: [] as string[] };
+  const have = await storedDayStats(database(), entity, first, shiftDate(today, -1)), fresh: InverterDay[] = [];
+  let date = shiftDate(today, -1), scanned = 0, attempts = 0;
+  while (date >= first && fresh.length < backfill && scanned < 400 && attempts < backfill * 3) {
+    if (!have.has(date)) { attempts++; const points = await storedSamples(entity, date, date), day = inverterDay(date, points); if (storableDay(day, points.length, today)) fresh.push(day); }
+    date = shiftDate(date, -1); scanned++;
+  }
+  await writeDayStats(database(), entity, fresh);
+  return { done: fresh.map(d => d.date) };
+}

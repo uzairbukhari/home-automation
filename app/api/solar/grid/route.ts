@@ -1,3 +1,4 @@
+import { serverTiming } from '@/lib/server-timing';
 import { getOwnerUser } from '@/lib/owner-auth';
 import { cachedSnapshot } from '@/lib/solar-store';
 import { localDate, shiftDate } from '@/lib/measurements';
@@ -5,6 +6,7 @@ import { gridDays } from '@/lib/grid-stats';
 
 // Outages and voltage health per day, rolled up from the saved inverter fields.
 export async function GET(request: Request) {
+  const timing = serverTiming();
   const user = await getOwnerUser();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
   try {
@@ -16,7 +18,7 @@ export async function GET(request: Request) {
       from = shiftDate(to, -(days - 1));
     return Response.json(
       { from, to, days: await gridDays(snapshot.device.serial, from, to), timeZone: 'Asia/Karachi' },
-      { headers: { 'cache-control': 'private, no-store' } },
+      { headers: { 'cache-control': 'private, no-store', ...timing.headers() } },
     );
   } catch (error) {
     return Response.json(

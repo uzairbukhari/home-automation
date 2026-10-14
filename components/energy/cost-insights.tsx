@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ChartCard } from './chart-card';
 import { SERIES, chartTick, chartTooltip, tooltipTrigger } from '@/lib/chart-theme';
-import { readJson } from '@/lib/client-data';
+import { useJson } from '@/lib/client-data';
 import { localDate } from '@/lib/measurements';
 import {
   ARRAY_KW,
@@ -52,17 +52,8 @@ export function BillOutlook({ gridKwh, from }: { gridKwh: number | null | undefi
 
 /** The house's always-on floor: what it draws in its quietest hours, and what that costs over a month. */
 export function Baseload({ rate }: { rate: number }) {
-  const [days, setDays] = useState<HeatmapDay[] | null>(null),
-    [error, setError] = useState('');
-  useEffect(() => {
-    let active = true;
-    readJson<{ days: HeatmapDay[] }>('/api/solar/heatmap?days=30')
-      .then((data) => active && setDays(data.days))
-      .catch((e) => active && setError(e instanceof Error ? e.message : 'Hourly data is unavailable'));
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { data, error } = useJson<{ days: HeatmapDay[] }>('/api/solar/heatmap?days=30', 'Hourly data is unavailable'),
+    days = data?.days ?? null;
   const floor = days ? baseload(days) : null;
   if (days && !floor) return null;
   return (
