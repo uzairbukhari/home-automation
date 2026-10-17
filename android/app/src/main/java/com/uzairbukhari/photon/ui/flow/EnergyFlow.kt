@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.uzairbukhari.photon.data.DayToday
 import com.uzairbukhari.photon.ui.Hues
 import kotlin.math.abs
 import kotlin.math.max
@@ -126,7 +127,7 @@ private class Sprites(density: Density) {
  * routes ease between readings, and the battery crossfades when it flips between charging and discharging.
  */
 @Composable
-fun EnergyFlow(snapshot: EnergySnapshot, modifier: Modifier = Modifier) {
+fun EnergyFlow(snapshot: EnergySnapshot, today: DayToday? = null, modifier: Modifier = Modifier) {
     val light = MaterialTheme.colorScheme.background.luminance() > 0.5f
     val palette = remember(light) { scenePalette(light) }
     val density = LocalDensity.current
@@ -136,7 +137,8 @@ fun EnergyFlow(snapshot: EnergySnapshot, modifier: Modifier = Modifier) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
 
     val flows = remember(snapshot.solarW, snapshot.homeW, snapshot.batteryW) { allocateFlows(snapshot.solarW, snapshot.homeW, snapshot.batteryW) }
-    val live = snapshot.fresh
+    // The flow keeps moving on the last known readings, however old they are.
+    val live = true
     val easing = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessVeryLow)
     val solarW = animateFloatAsState(if (live) flows.solarUsed else 0f, easing, label = "solar")
     val gridW = animateFloatAsState(if (live) flows.grid else 0f, easing, label = "grid")
@@ -235,7 +237,13 @@ fun EnergyFlow(snapshot: EnergySnapshot, modifier: Modifier = Modifier) {
                 Hues.Home, selected == FlowNode.Home.name, { select(FlowNode.Home) },
                 Modifier.offset { place(FlowNode.Home, 10f, 78f) }.size(cardW, cardH))
         }
-        RouteBreakdown(flows, selected?.let { FlowNode.valueOf(it) })
+        PowerCard(
+            snapshot, flows, today, selected?.let { FlowNode.valueOf(it) },
+            onSelect = { node ->
+                haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                selected = node?.name
+            },
+        )
     }
 }
 
@@ -245,8 +253,7 @@ private fun describe(s: EnergySnapshot, f: Flows): String {
         s.batteryW < -20f -> "discharging"
         else -> "idle"
     }
-    val state = if (s.fresh) "" else "Readings are old, so the flow is paused. "
-    return state + "Solar ${kw(s.solarW)} kilowatts, home ${kw(s.homeW)} kilowatts, grid import ${kw(s.gridW ?: f.grid)} kilowatts, " +
+    return "Solar ${kw(s.solarW)} kilowatts, home ${kw(s.homeW)} kilowatts, grid import ${kw(s.gridW ?: f.grid)} kilowatts, " +
         "battery ${s.soc?.roundToInt() ?: "unknown"} percent $battery."
 }
 
@@ -481,65 +488,5 @@ private fun DrawScope.drawBatteryCabinet(iso: Iso, pal: ScenePalette, soc: Float
             close()
         }
         drawPath(bar, lerp(pal.conduit, tint, fill).copy(alpha = 0.95f))
-    }
-}
-
-@Composable
-private fun RouteBreakdown(flows: Flows, selected: FlowNode?) {
-    val rows = listOf(
-        Triple("Solar → Home", flows.solarToHome, Hues.Solar) to setOf(FlowNode.Solar, FlowNode.Home),
-        Triple("Solar → Battery", flows.solarToBattery, Hues.Solar) to setOf(FlowNode.Solar, FlowNode.Battery),
-        Triple("Battery → Home", flows.batteryToHome, Hues.Discharging) to setOf(FlowNode.Battery, FlowNode.Home),
-        Triple("Grid → Home", flows.gridToHome, Hues.Grid) to setOf(FlowNode.Grid, FlowNode.Home),
-        Triple("Grid → Battery", flows.gridToBattery, Hues.Grid) to setOf(FlowNode.Grid, FlowNode.Battery),
-    )
-    val shown = if (selected == null) rows else rows.filter { selected in it.second }
-    val peak = max(500f, rows.maxOf { it.first.second })
-    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row {
-                Text(if (selected == null) "Where the power goes" else "${selected.label} routes", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                Text(if (selected == null) "All routes" else "Tap again to close", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            shown.forEach { (row, _) ->
-                val (name, watts, color) = row
-                val fraction by animateFloatAsState((watts / peak).coerceIn(0f, 1f), tween(600), label = name)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row {
-                        Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                        Text("${kw(watts)} kW", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))) {
-                        Box(Modifier.fillMaxWidth(fraction).height(6.dp).clip(RoundedCornerShape(6.dp)).background(color))
-                    }
-                }
-            }
-            if (selected == null) HomeMix(flows)
-        }
-    }
-}
-
-/** Share of the home's power from solar, battery and grid as one stacked bar. */
-@Composable
-private fun HomeMix(flows: Flows) {
-    val parts = listOf(
-        Triple("Solar", flows.solarToHome, Hues.Solar),
-        Triple("Battery", flows.batteryToHome, Hues.Discharging),
-        Triple("Grid", flows.gridToHome, Hues.Grid),
-    )
-    val total = parts.sumOf { it.second.toDouble() }.toFloat()
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Home is powered by", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-        if (total < 50f) {
-            Text("Home is idle", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
-            Row(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))) {
-                parts.filter { it.second > 0f }.forEach { (_, watts, color) -> Box(Modifier.weight(watts / total).fillMaxSize().background(color)) }
-            }
-            Text(
-                parts.joinToString(" · ") { (name, watts, _) -> "$name ${(watts / total * 100f).roundToInt()}%" },
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }

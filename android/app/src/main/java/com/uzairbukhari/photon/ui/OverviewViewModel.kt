@@ -87,7 +87,7 @@ class OverviewViewModel(private val graph: Graph) : ViewModel() {
             _state.update { it.copy(refreshing = true, notice = null) }
             val notice = try {
                 graph.repository.refreshNow()
-                "Collected the latest readings."
+                null
             } catch (error: ApiException) {
                 if (error.status == 429) "Readings were refreshed a moment ago." else (error.message ?: "Refresh failed.")
             } catch (error: IOException) {

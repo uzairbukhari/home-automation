@@ -115,13 +115,7 @@ private fun Header(state: OverviewState, onRefresh: () -> Unit, onToggleConnecti
 private fun Content(latest: SolarLatest, state: OverviewState, showConnections: Boolean) {
     val observed = parseInstant(latest.updatedAt)
     val fresh = !latest.stale && !isStale(observed) && !state.offline
-    if (!fresh) {
-        Banner(
-            if (state.offline) "You're offline. Showing the last saved readings." else "Readings are older than expected, so live flow is paused.",
-            Hues.Warning,
-        )
-    }
-    EnergyFlow(energySnapshot(latest, fresh))
+    EnergyFlow(energySnapshot(latest, fresh), latest.today)
 
     SolarCard(latest, fresh)
     BatteryCard(latest, fresh, state.settings.capacity, state.settings.threshold)

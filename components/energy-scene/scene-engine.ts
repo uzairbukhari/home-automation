@@ -18,7 +18,7 @@ export function createEngine(canvas: HTMLCanvasElement, opts: { reducedMotion: (
   const shown = { solar: 0, home: 0, grid: 0, soc: 0 };
   const lut = {} as Record<Node, Lut>;
   let T: Tokens, proj: Projection, sprites = {} as Record<string, HTMLCanvasElement>;
-  let W = 0, H = 0, dpr = 1, artDirty = true, battMix = 0, clock = 0, last = 0, raf = 0, visible = true, stale = false, selected: Node | null = null;
+  let W = 0, H = 0, dpr = 1, artDirty = true, battMix = 0, clock = 0, last = 0, raf = 0, visible = true, selected: Node | null = null;
   let targets = { solar: 0, grid: 0, battery: 0, home: 0 }, goal: Shown = { solar: 0, home: 0, grid: 0, soc: 0 };
   const tmp: [number, number] = [0, 0];
 
@@ -138,7 +138,7 @@ export function createEngine(canvas: HTMLCanvasElement, opts: { reducedMotion: (
     const dt = Math.min(0.05, (now - last) / 1000); last = now; clock += dt;
     let moving = false;
     for (const k of NODES) {
-      const s = springs[k], g = stale ? 0 : targets[k];
+      const s = springs[k], g = targets[k];
       s.v += (K * (g - s.x) - C * s.v) * dt; s.x += s.v * dt;
       if (Math.abs(g - s.x) > 1 || Math.abs(s.v) > 1) moving = true;
     }
@@ -146,7 +146,7 @@ export function createEngine(canvas: HTMLCanvasElement, opts: { reducedMotion: (
     const e = Math.min(1, dt * 6);
     for (const key of ['solar', 'home', 'grid', 'soc'] as const) { const d = goal[key] - shown[key]; if (Math.abs(d) > 0.01) moving = true; shown[key] += d * e; }
     draw(dt); opts.onFrame(shown);
-    const animated = !opts.reducedMotion() && !stale;
+    const animated = !opts.reducedMotion();
     raf = visible && (moving || animated) ? requestAnimationFrame(tick) : 0;
   }
   function start() { if (!raf && visible) raf = requestAnimationFrame(t => { last = t; tick(t); }); }
@@ -158,7 +158,7 @@ export function createEngine(canvas: HTMLCanvasElement, opts: { reducedMotion: (
       // the grid cable only carries power the inverter takes in; during an outage it is idle
       targets = { solar: r.solarHome + r.solarBattery, grid: s.gridDown ? 0 : r.gridHome + r.gridBattery, battery: s.battery, home: s.home };
       goal = { solar: s.solar, home: s.home, grid: r.gridHome + r.gridBattery, soc: s.soc ?? 0 };
-      stale = !s.fresh; start();
+      start();
     },
     setSelected(n: Node | null) { selected = n; start(); },
     setVisible(v: boolean) { visible = v; if (v) start(); },
