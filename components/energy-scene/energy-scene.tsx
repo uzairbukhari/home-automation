@@ -57,7 +57,7 @@ export const EnergyScene = memo(function EnergyScene({ snapshot, capacity }: { s
   const callouts = useRef<Partial<Record<Node, HTMLElement | null>>>({});
   const values = useRef<Partial<Record<keyof Shown, HTMLElement | null>>>({});
   const reduced = useReducedMotion();
-  const [selected, setSelected] = useState<Node | null>(null), [tip, setTip] = useState<Tip | null>(null);
+  const [selected, setSelected] = useState<Node | null>(null), [tip, setTip] = useState<Tip | null>(null), [showIdle, setShowIdle] = useState(false), [openRoute, setOpenRoute] = useState<string | null>(null);
   const routes = useMemo(() => allocate(snapshot.solar, snapshot.home, snapshot.battery), [snapshot]);
   const latest = useRef({ snapshot, routes, capacity });
   useEffect(() => { latest.current = { snapshot, routes, capacity }; });
@@ -128,7 +128,23 @@ export const EnergyScene = memo(function EnergyScene({ snapshot, capacity }: { s
     ['Grid → Battery', routes.gridBattery, 'var(--flow-grid-import)', ['grid', 'battery']],
   ];
   const mix: [string, number, string][] = [['Solar', routes.solarHome, 'var(--flow-solar)'], ['Battery', routes.batteryHome, 'var(--flow-discharge)'], ['Grid', routes.gridHome, 'var(--flow-grid-import)']];
-  const shownRows = selected ? rows.filter(r => r[3].includes(selected)) : rows, max = Math.max(500, ...rows.map(r => r[1]));
+  const scoped = selected ? rows.filter(r => r[3].includes(selected)) : rows, max = Math.max(500, ...rows.map(r => r[1]));
+  const live = scoped.filter(r => r[1] >= ACTIVE_W), idle = scoped.filter(r => r[1] < ACTIVE_W);
+  const mixTotal = mix.reduce((n, m) => n + m[1], 0);
+  const names = mix.filter(m => m[1] >= ACTIVE_W).sort((x, y) => y[1] - x[1]).map(m => m[0] === 'Solar' ? 'solar' : m[0] === 'Battery' ? 'the battery' : 'the grid');
+  const headline = (names.length ? `The home is ${names.length === 1 ? 'running on ' + names[0] : 'mostly on ' + names[0] + ', with ' + names.slice(1).join(' and ')}.` : 'The home is idle.')
+    + (routes.solarBattery >= ACTIVE_W ? ' Spare solar is charging the battery.' : routes.gridBattery >= ACTIVE_W ? ' The grid is charging the battery.' : '');
+  const detail = (name: string, w: number, from: string, to: string) => w < ACTIVE_W ? `Nothing is flowing ${name.toLowerCase()} right now.`
+    : `${kw(w)} kW from ${from.toLowerCase()} is ${to === 'Battery' ? 'charging the battery' : from === 'Battery' ? 'powering the home from the battery' : 'powering the home'}.` + (to === 'Home' && snapshot.home > 0 ? ` That is ${Math.round((w / snapshot.home) * 100)}% of what the home uses.` : '');
+  const routeRow = ([name, w, color]: [string, number, string, Node[]]) => {
+    const [from, to] = name.split(' → '), open = openRoute === name;
+    return (
+      <button type="button" className="scene-row" key={name} aria-expanded={open} onClick={() => setOpenRoute(open ? null : name)}>
+        <span>{name}</span><output>{kw(w)} kW</output><div className="track"><span className="fill" style={{ width: `${(w / max) * 100}%`, background: color }} /></div>
+        {open && <small className="route-detail">{detail(name, w, from, to)}</small>}
+      </button>
+    );
+  };
 
   return (
     <div className="energy-scene" data-stale={!snapshot.fresh}>
@@ -150,10 +166,18 @@ export const EnergyScene = memo(function EnergyScene({ snapshot, capacity }: { s
         {tip && <div className="scene-tip" role="status" style={{ left: tip.x, top: tip.y }}><strong>{tip.title}</strong>{tip.rows.map(([k, v]) => <div key={k}>{k}<b>{v}</b></div>)}</div>}
       </div>
       <div className="scene-breakdown" aria-live="polite">
-        <header><span>{selected ? LABEL[selected] + ' routes' : 'Where the power goes'}</span>{selected ? <Link href={`/solar?entity=${selected}`}>View details ›</Link> : <span className="scene-pill">All routes</span>}</header>
-        {shownRows.map(([name, w, color]) => (
-          <div className="scene-row" key={name}><span>{name}</span><output>{kw(w)} kW</output><div className="track"><span className="fill" style={{ width: `${(w / max) * 100}%`, background: color }} /></div></div>
-        ))}
+        <header><span>{selected ? LABEL[selected] + ' routes' : 'Where the power goes'}</span>{selected ? <Link href={`/solar?entity=${selected}`}>View details ›</Link> : <span className="scene-pill">Tap to explore</span>}</header>
+        <p className="scene-headline">{headline}</p>
+        <div className="scene-sources">
+          {mix.map(([n, w, color]) => {
+            const node = n.toLowerCase() as Node;
+            return <button type="button" key={n} aria-pressed={selected === node} style={{ ['--c' as string]: color }} onClick={() => setSelected(x => (x === node ? null : node))}><span>{n}</span><b>{mixTotal >= ACTIVE_W ? Math.round((w / mixTotal) * 100) : 0}%</b><small>{kw(w)} kW</small></button>;
+          })}
+        </div>
+        {live.length === 0 && <span className="mix-idle">{selected ? `No power is moving to or from ${LABEL[selected].toLowerCase()}.` : 'No power is moving between the nodes.'}</span>}
+        {live.map(routeRow)}
+        {idle.length > 0 && <button type="button" className="scene-idle-toggle" onClick={() => setShowIdle(v => !v)}>{showIdle ? 'Hide idle routes' : `Show ${idle.length} idle route${idle.length === 1 ? '' : 's'}`}</button>}
+        {showIdle && idle.map(routeRow)}
         <div className="scene-mix">
           <span className="mix-title">Home is powered by</span>
           {snapshot.home > ACTIVE_W ? <>

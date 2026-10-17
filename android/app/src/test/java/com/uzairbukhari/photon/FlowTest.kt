@@ -45,3 +45,27 @@ class FlowTest {
         assertTrue(particleRadiusDp(4000f) > particleRadiusDp(50f))
     }
 }
+
+class PowerCardTest {
+    private fun snap(solar: Float, home: Float, battery: Float) = com.uzairbukhari.photon.ui.flow.EnergySnapshot(solar, home, null, battery, 50f, true)
+
+    @org.junit.Test fun headlineNamesTheBatteryWhenItCarriesTheHome() {
+        val s = snap(0f, 500f, -500f)
+        val f = com.uzairbukhari.photon.ui.flow.allocateFlows(0f, 500f, -500f)
+        org.junit.Assert.assertEquals("The home is running on the battery.", com.uzairbukhari.photon.ui.flow.powerHeadline(s, f))
+    }
+
+    @org.junit.Test fun headlineMentionsSpareSolarCharging() {
+        val s = snap(3000f, 1000f, 1500f)
+        val f = com.uzairbukhari.photon.ui.flow.allocateFlows(3000f, 1000f, 1500f)
+        org.junit.Assert.assertEquals("The home is running on solar. Spare solar is charging the battery.", com.uzairbukhari.photon.ui.flow.powerHeadline(s, f))
+    }
+
+    @org.junit.Test fun daySourcesSplitsUseWithoutGoingNegative() {
+        val d = com.uzairbukhari.photon.data.DayToday(homeKwh = 10.0, gridKwh = 2.0, batteryDischargeKwh = 3.0)
+        val r = com.uzairbukhari.photon.ui.flow.daySources(d)!!
+        org.junit.Assert.assertEquals(5.0, r.solar, 1e-9)
+        org.junit.Assert.assertEquals(10.0, r.total, 1e-9)
+        org.junit.Assert.assertNull(com.uzairbukhari.photon.ui.flow.daySources(com.uzairbukhari.photon.data.DayToday(homeKwh = 0.0)))
+    }
+}

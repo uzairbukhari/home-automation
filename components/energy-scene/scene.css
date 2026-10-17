@@ -5,7 +5,6 @@ html[data-theme=light] .energy-scene{--scene-sky-day-top:#bfe3f2;--scene-sky-day
 .scene-stage{position:relative;width:100%;aspect-ratio:1/1.02;overflow:hidden;background:linear-gradient(#0e1a33,#1d3557);isolation:isolate}
 html[data-theme=light] .scene-stage{background:linear-gradient(#bfe3f2,#eaf6fb)}
 .scene-stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;transition:filter .6s ease}
-.energy-scene[data-stale=true] canvas{filter:saturate(.25) brightness(.85)}
 .scene-callout{position:absolute;transform:translate(-50%,-50%);display:grid;gap:0;min-width:92px;max-width:46%;padding:7px 12px;text-align:left;color:var(--foreground);font:inherit;background:var(--glass);border:1px solid var(--glass-line);border-radius:16px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);text-decoration:none;cursor:pointer;transition:transform .18s ease,box-shadow .3s ease;z-index:2}
 .scene-callout:hover,.scene-callout:focus-visible{transform:translate(-50%,-50%) scale(1.03)}
 .scene-callout:active{transform:translate(-50%,-50%) scale(.97)}
@@ -24,7 +23,7 @@ html[data-theme=light] .scene-stage{background:linear-gradient(#bfe3f2,#eaf6fb)}
 .scene-breakdown header{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:600}
 .scene-breakdown header a{font-size:.8125rem;font-weight:500}
 .scene-row{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;font-size:.8125rem}
-.scene-row output{font-variant-numeric:tabular-nums;font-weight:600}
+.scene-row{background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer;width:100%}.scene-row .route-detail{grid-column:1/-1;color:var(--muted-foreground)}.scene-headline{margin:0;font-size:.875rem}.scene-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.scene-sources button{display:grid;text-align:left;gap:1px;padding:8px 10px;border-radius:12px;border:1px solid var(--border);background:none;color:inherit;font:inherit;font-size:.75rem;cursor:pointer}.scene-sources button span{color:var(--c);font-weight:600}.scene-sources button b{font-size:1rem;font-variant-numeric:tabular-nums}.scene-sources button small{color:var(--muted-foreground)}.scene-sources button[aria-pressed=true]{border-color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent)}.scene-idle-toggle{background:none;border:0;padding:0;color:var(--primary,inherit);font:inherit;font-size:.8125rem;text-align:left;cursor:pointer}.scene-row output{font-variant-numeric:tabular-nums;font-weight:600}
 .scene-row .track{grid-column:1/-1;height:6px;border-radius:6px;background:var(--border);overflow:hidden}
 .scene-row .fill{display:block;height:100%;border-radius:6px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
 .scene-pill{display:inline-flex;align-items:center;gap:6px;font-size:.75rem;color:var(--muted-foreground)}
