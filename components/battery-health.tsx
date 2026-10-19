@@ -25,7 +25,7 @@ export function BatteryHealth({ report, rangeLabel, capacity, reserve }: { repor
           <div className="warranty-meter" role="img" aria-label={`${num(used, 2)} percent of the cycle warranty used`}><span style={{ width: `${Math.max(1.5, Math.min(100, used ?? 0))}%` }} /></div>
         </Tile>
         <Tile icon={HeartPulse} label="Estimated health" value={health ? num(health.pct, 0) : '—'} unit={health ? '%' : undefined} note={health ? `About ${num(health.estimatedCapacityKwh, 1)} of ${num(capacity, 1)} kWh usable, from ${health.samples} deep-cycle days.` : `Needs 3 days with a 20%+ swing in charge (${stats?.healthDays ?? 0} so far).`} />
-        <Tile icon={Hourglass} label="Projected warranty life" value={stats?.yearsRemaining == null ? '—' : stats.yearsRemaining > 30 ? '30+' : num(stats.yearsRemaining, 1)} unit="years" note={stats?.cyclesPerDay == null ? 'Needs recent usage to project.' : `At your recent pace of ${num(stats.cyclesPerDay, 2)} cycles a day.`} />
+        <Tile icon={Hourglass} label="Projected battery life" value={stats?.yearsRemaining == null ? '—' : stats.yearsRemaining > 30 ? '30+' : num(stats.yearsRemaining, 1)} unit="years" note={stats?.cyclesPerDay == null ? 'Needs recent usage to project.' : `At your recent pace of ${num(stats.cyclesPerDay, 2)} cycles a day.`} />
       </div>
       <div className="system-stats">
         <div><span>Charged · {rangeLabel}</span><strong>{num(report?.batteryChargeKwh, 2)} kWh</strong></div>

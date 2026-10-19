@@ -25,26 +25,27 @@ function Column({ title, days, top }: { title: string; days: Array<{ date: strin
   );
 }
 
-/** The strongest and weakest solar days of the selected year, so a bad day can be put in context. */
+const WINDOW_DAYS = 90;
+
+/** The strongest and weakest solar days of the last 90 days, so a bad day can be put in context. */
 export function BestWorstDays({
   buckets,
   today,
-  year,
 }: {
   buckets: Array<{ date: string; solar: number | null; grid: number | null; home: number | null }>;
   today: string;
-  year: string;
 }) {
-  const { best, worst } = bestWorstDays(buckets, today, 3),
+  const since = new Date(new Date(`${today}T12:00:00Z`).getTime() - WINDOW_DAYS * 86400000).toISOString().slice(0, 10),
+    { best, worst } = bestWorstDays(buckets, today, 3, since),
     top = best[0]?.solar ?? 1;
   return (
     <ChartCard
       eyebrow="Best and weakest days"
-      title={`Solar highs and lows · ${year}`}
+      title={`Solar highs and lows · last ${WINDOW_DAYS} days`}
       footnote="Solar energy per day from the inverter's daily totals. Today is left out until it ends."
     >
       {!best.length ? (
-        <div className="chart-empty">No full solar days recorded for {year} yet.</div>
+        <div className="chart-empty">No full solar days recorded in the last {WINDOW_DAYS} days.</div>
       ) : (
         <div className="day-ranks">
           <Column title="Best days" days={best as Array<{ date: string; solar: number }>} top={top} />

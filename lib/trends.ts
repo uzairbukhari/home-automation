@@ -109,9 +109,10 @@ export function calendarGrid(buckets: Bucket[], year: string) {
 }
 
 /** Best and worst solar days, leaving out today and days without a reading. */
-export function bestWorstDays(buckets: Bucket[], today: string, n = 3) {
+export function bestWorstDays(buckets: Bucket[], today: string, n = 3, since = '') {
   const days = buckets.filter(
-      (b): b is Bucket & { solar: number } => b.solar !== null && b.date < today && b.date.length === 10,
+      (b): b is Bucket & { solar: number } =>
+        b.solar !== null && b.date < today && b.date >= since && b.date.length === 10,
     ),
     sorted = [...days].sort((a, b) => b.solar - a.solar);
   return { best: sorted.slice(0, n), worst: sorted.length > n * 2 ? sorted.slice(-n).reverse() : [] };
