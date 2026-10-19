@@ -1110,7 +1110,7 @@ export function SolarDashboard({ live, settings, pin }: { live: DessSnapshot | n
               currentYear={localDate().slice(0, 4)}
             />
             <HourHeatmap />
-            <BestWorstDays buckets={reports.calendar} today={localDate()} year={year} />
+            <BestWorstDays buckets={reports.calendar} today={localDate()} />
             <PerformanceReports reports={reports} error={error} range={range} setRange={setRange} />
           </>
         )}

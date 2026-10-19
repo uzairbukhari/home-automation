@@ -250,7 +250,7 @@ private fun BatteryTab(model: EnergyViewModel) {
                 )
             }
             Card {
-                Text("Projected warranty life", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text("Projected battery life", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                 val years = stats.yearsRemaining
                 Text(
                     if (years == null) "—" else (if (years > 30) "30+" else num(years, 1)) + " years",
