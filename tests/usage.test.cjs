@@ -63,3 +63,52 @@ test('Day-stat backfill does not re-read a day it already found too sparse to st
   await dayStatBackfillStep('inv');sqlite.prepare=real;
   assert.equal(reads.filter(sql=>/FROM solar_samples WHERE entity_id=\? AND source_timestamp>=\?/.test(sql)).length,0,'the second run skips the remembered day');
 });
+
+test('Month projection sets the economy level and the alert steps',()=>{
+  const {projectMonth}=require('../lib/usage.ts'),day=(d,h=12)=>Date.UTC(2026,9,d,h-5);
+  assert.equal(projectMonth(10e6,day(11)).level,0,'10M after 10 days projects to ~31M');
+  assert.equal(projectMonth(250e6,day(11)).level,3,'250M after 10 days projects to ~775M');
+  assert.equal(projectMonth(150e6,day(11)).level,2,'150M after 10 days projects to ~440M, 89%');
+});
+
+test('Economy mode pauses imports at level 1, maintenance at 2 and everything but alerts at 3',async()=>{
+  const {sqlite}=database(),{recordUsage,resetEconomyCache}=require('../lib/usage.ts'),{maintainCollection}=require('../lib/collection.ts');
+  const jobs=()=>sqlite.prepare("SELECT id FROM app_jobs WHERE id IN ('history-unit','retention','actual-energy-repair')").all().map(r=>r.id).sort();
+  const reset=()=>{sqlite.exec("DELETE FROM app_jobs");sqlite.exec("DELETE FROM operational_daily");resetEconomyCache();};
+  Object.assign(require('./helpers.cjs').env,{VAPID_SUBJECT:'mailto:o@example.com',VAPID_PUBLIC_KEY:'pub',VAPID_PRIVATE_KEY:'priv'});
+  const month=new Date(Date.now()+5*3600000).toISOString().slice(0,7);
+  const setReads=async(n)=>{reset();sqlite.prepare("INSERT INTO operational_daily(date,kind,data) VALUES (?,?,?)").run(month+'-01','usage:collection',JSON.stringify({read:n,written:0,runs:1}));};
+  await setReads(480e6);await maintainCollection().catch(()=>{});
+  assert.deepEqual(jobs(),[],'at 96%+ only alerts run');
+  await setReads(10);await maintainCollection().catch(e=>{throw e});
+  assert.ok(jobs().includes('actual-energy-repair'),'normal mode runs maintenance');
+});
+
+test('Usage alerts go out once per step and month',async()=>{
+  const {sqlite}=database(),{usageAlerts,resetEconomyCache}=require('../lib/usage.ts');
+  sqlite.exec("DELETE FROM operational_daily");resetEconomyCache();
+  sqlite.prepare("INSERT OR IGNORE INTO notification_rules(user_id,id,config) VALUES ('alice','r','{}')").run();
+  const month=new Date(Date.now()+5*3600000).toISOString().slice(0,7);
+  sqlite.prepare("INSERT INTO operational_daily(date,kind,data) VALUES (?,?,?)").run(month+'-01','usage:collection',JSON.stringify({read:300e6,written:0,runs:1}));
+  await usageAlerts();await usageAlerts();
+  const rows=sqlite.prepare("SELECT event_id FROM app_alerts WHERE event_id LIKE 'usage:%'").all().map(r=>r.event_id);
+  assert.ok(rows.length>=1&&new Set(rows).size===rows.length,'one alert per step, never repeated: '+rows);
+});
+
+test('The queries on the 5-minute and maintenance paths never scan a history table',()=>{
+  const {sqlite}=database();
+  const plan=sql=>sqlite.prepare('EXPLAIN QUERY PLAN '+sql).all().map(r=>r.detail);
+  const history=/(?:SCAN|SCAN TABLE) (tuya_observations|tuya_device_state|solar_samples|solar_raw_fields|provider_requests|provider_events|telemetry_summaries|automation_runs|automation_actions|tuya_command_log)\b(?!.*COVERING INDEX.*(?:time|status))/;
+  const queries=[
+    "SELECT device_id,code FROM tuya_observations WHERE observed_at>='x'",
+    "SELECT data FROM solar_samples WHERE entity_id='e' AND source_timestamp>='a' AND source_timestamp<'b' ORDER BY source_timestamp",
+    "SELECT COUNT(*) FROM provider_requests WHERE provider='tuya' AND purpose='history' AND timestamp>='x'",
+    "SELECT id FROM tuya_command_log WHERE status IN ('pending','accepted','uncertain')",
+    "UPDATE automation_actions SET status='x' WHERE command_id IS NOT NULL AND status IN ('pending','accepted','uncertain')",
+    "UPDATE automation_runs SET status='x' WHERE status IN ('pending','executing')",
+    "DELETE FROM telemetry_summaries WHERE granularity='hour' AND period<'x'",
+    "SELECT period,data FROM telemetry_summaries WHERE source='tuya' AND entity_id='d' AND granularity='day' AND period>='a' AND period<='b'",
+    "SELECT period,grid_kwh FROM solar_energy_periods WHERE period_type='day' AND period>='a' AND period<='b'",
+  ];
+  for(const sql of queries){const steps=plan(sql);assert.ok(!steps.some(d=>history.test(d)),`${sql}\n  scans a history table: ${steps.join(' | ')}`);}
+});
