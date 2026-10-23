@@ -26,3 +26,17 @@ test('Daily usage rows accumulate per job',async()=>{
   const rows=await usageSummary(1),by=Object.fromEntries(rows.map(r=>[r.job,r]));
   assert.deepEqual([by.collection.read,by.collection.written,by.collection.runs],[1500,15,2]);assert.equal(by.maintenance.read,200);
 });
+
+test('The monthly Tuya call count runs once and is skipped while the budget row exists',async()=>{
+  const {sqlite}=database(),{env}=require('./helpers.cjs'),{reserveProviderRequest}=require('../lib/provider-policy.ts');
+  Object.assign(env,{TUYA_MONTHLY_ALLOWANCE:'26000',TUYA_ENTITLEMENT_EXPIRES:'2999-01-01'});
+  const now=new Date('2026-10-15T10:00:00Z'),month='2026-10';
+  sqlite.prepare("INSERT INTO provider_requests(provider,purpose,timestamp,status) VALUES ('tuya','poll',?,200)").run('2026-10-02T00:00:00.000Z');
+  sqlite.prepare("INSERT INTO provider_requests(provider,purpose,timestamp,status) VALUES ('tuya','poll',?,200)").run('2026-09-30T23:59:59.000Z');
+  await reserveProviderRequest('tuya','poll',now);
+  assert.equal(sqlite.prepare('SELECT used FROM provider_budget WHERE period=?').get(month).used,2,'one earlier call this month plus this one; September is not counted');
+  sqlite.prepare("INSERT INTO provider_requests(provider,purpose,timestamp,status) VALUES ('tuya','poll',?,200)").run('2026-10-03T00:00:00.000Z');
+  await reserveProviderRequest('tuya','poll',now);
+  assert.equal(sqlite.prepare('SELECT used FROM provider_budget WHERE period=?').get(month).used,3,'the stored counter is incremented, not recounted');
+  for(const key of ['TUYA_MONTHLY_ALLOWANCE','TUYA_ENTITLEMENT_EXPIRES'])delete env[key];
+});

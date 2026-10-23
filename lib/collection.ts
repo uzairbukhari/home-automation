@@ -59,7 +59,10 @@ export async function runCollection(manual=false){
     return result;
   }catch(error){await finishJob(job,String(error));throw error;}
 }
+// Indexes the 5-minute path relies on. The deploy migration creates them too; this daily step covers a deploy that skipped migrations while Turso was blocked.
+export async function ensureIndexes(){await database().prepare('CREATE INDEX IF NOT EXISTS idx_tuya_obs_time ON tuya_observations (observed_at)').run();}
 export async function maintainCollection(){
+    await dueWork('ensure-indexes',86400000,ensureIndexes);
     await evaluateAlerts();
     await dueWork('actual-energy-repair',900000,repairActualEnergyStep);
     // Current counters are shared and refreshed hourly rather than per report or browser.
