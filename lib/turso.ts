@@ -6,7 +6,7 @@
 // (Vercel).
 
 type HranaValue = { type: 'null' } | { type: 'integer'; value: string } | { type: 'float'; value: number } | { type: 'text'; value: string } | { type: 'blob'; base64: string };
-type HranaResult = { cols: Array<{ name: string }>; rows: HranaValue[][]; affected_row_count: number; last_insert_rowid: string | null };
+type HranaResult = { cols: Array<{ name: string }>; rows: HranaValue[][]; affected_row_count: number; last_insert_rowid: string | null; rows_read?: number; rows_written?: number };
 type HranaError = { message: string; code?: string };
 type HranaStmt = { sql: string; args?: HranaValue[]; want_rows?: boolean };
 type HranaRequest = { type: 'execute'; stmt: HranaStmt } | { type: 'batch'; batch: { steps: unknown[] } };
@@ -44,11 +44,17 @@ const wrap = (result: HranaResult) => ({ success: true as const, results: rowsOf
 
 const REQUEST_TIMEOUT_MS = 25_000;
 
+// Turso answers every query with a BLOCKED error once the plan's monthly quota is used up.
+const blocked = (code: unknown, message: string) => /blocked/i.test(String(code ?? '')) || /\bblocked\b/i.test(message);
+export const isDatabaseBlocked = (error: unknown) => Boolean((error as { blocked?: boolean })?.blocked) || (error instanceof Error && /\bblocked\b/i.test(error.message));
+
 export function createTursoDatabase(config: TursoConfig): Db {
   const base = config.url.replace(/^libsql:\/\//, 'https://').replace(/^wss?:\/\//, 'https://').replace(/\/+$/, '');
   const doFetch = config.fetch ?? fetch;
   // Visible through /api/admin/collect-debug so the database traffic of a run can be inspected.
-  const stats = { httpRequests: 0, totalMs: 0 };
+  // rowsRead / rowsWritten are the figures Turso bills: it reports them with every result.
+  const stats = { httpRequests: 0, totalMs: 0, rowsRead: 0, rowsWritten: 0 };
+  const count = (result: HranaResult | null | undefined) => { stats.rowsRead += result?.rows_read ?? 0; stats.rowsWritten += result?.rows_written ?? 0; };
 
   // Cumulative wall-clock time spent inside send() (retries included); concurrent calls overlap, so it can exceed elapsed time.
   async function send(request: HranaRequest): Promise<unknown> {
@@ -67,11 +73,13 @@ export function createTursoDatabase(config: TursoConfig): Db {
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
         if (response.status >= 500 || response.status === 429) lastError = new Error(`Turso HTTP ${response.status}`);
-        else if (!response.ok) throw Object.assign(new Error(`Turso HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`), { final: true });
+        else if (!response.ok) { const text = (await response.text()).slice(0, 200); throw Object.assign(new Error(`Turso HTTP ${response.status}: ${text}`), { final: true, blocked: blocked(response.status, text) }); }
         else {
           const [first] = (await response.json() as { results: Array<{ type: 'ok'; response: { result: unknown } } | { type: 'error'; error: HranaError }> }).results;
-          if (first.type === 'error') throw Object.assign(new Error(first.error.message), { final: true });
-          return first.response.result;
+          if (first.type === 'error') throw Object.assign(new Error(first.error.message), { final: true, blocked: blocked(first.error.code, first.error.message) });
+          const result = first.response.result as HranaResult | BatchResult;
+          if ('step_results' in result) result.step_results.forEach(count); else count(result);
+          return result;
         }
       } catch (error) {
         if ((error as { final?: boolean }).final) throw error;

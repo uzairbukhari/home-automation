@@ -52,9 +52,14 @@ async function migrate() {
 }
 
 const [command, value] = process.argv.slice(2);
+const blocked = error => /\bblocked\b/i.test(error.message);
 try {
   if (command === 'migrate') await migrate();
   else if (command === 'query') console.log(JSON.stringify(await run(value)));
   else if (command === 'exec') await run(value);
   else { console.error('usage: turso.mjs migrate | query <sql> | exec <sql>'); process.exit(2); }
-} catch (error) { console.error(error.message); process.exit(1); }
+} catch (error) {
+  // Over the monthly quota Turso blocks every query; skipping lets the deploy go ahead. Pending migrations apply on the first deploy after the reset.
+  if (command === 'migrate' && blocked(error)) { console.warn('Turso is blocked (monthly quota reached): migrations skipped, they will run on the next deploy.'); process.exit(0); }
+  console.error(error.message); process.exit(1);
+}
