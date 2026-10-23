@@ -66,7 +66,7 @@ fun AutomationsScreen(model: AutomationsViewModel, onMessage: (String) -> Unit) 
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 model.load()
-                delay(30_000)
+                delay(60_000)
             }
         }
     }

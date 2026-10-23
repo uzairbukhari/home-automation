@@ -21,10 +21,12 @@ import { dayStatBackfillStep } from './day-stats';
 import { repairActualEnergyStep, rebuildLongPeriods, retentionStep, summarizeTuyaDay } from './telemetry';
 
 async function connection(provider:string,ok:boolean,error?:string){await database().prepare('INSERT INTO connection_state(provider,status,last_success_at,last_error_code,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(provider) DO UPDATE SET status=excluded.status,last_success_at=COALESCE(excluded.last_success_at,connection_state.last_success_at),last_error_code=excluded.last_error_code,updated_at=excluded.updated_at').bind(provider,ok?'connected':'degraded',ok?new Date().toISOString():null,error??null,new Date().toISOString()).run();}
+// Recent days that have no coverage record are re-fetched first, so a collection outage of up to this many days is refilled from DessMonitor afterwards.
+const REFILL_DAYS=30;
 export async function historyUnit(){
   // The backfill takes a few DessMonitor days (~1,500 row writes each) in two of every three 5-minute slots, so years of history arrive within a day or two; Tuya takes the third.
   const db=database(),turn=Math.floor(Date.now()/300000)%3;
-  const solarBackfillDay=async():Promise<{status?:string;samples?:number;source?:string;date?:string}>=>{const provider=new DessMonitorProvider(),snapshot=await cachedSnapshot(true,false);if(!snapshot)return{status:'no_solar_metadata'};const entity=snapshot.device.serial,row=await db.prepare('SELECT next_backfill_date FROM solar_sync_state WHERE entity_id=?').bind(entity).first<{next_backfill_date:string|null}>(),date=row?.next_backfill_date??shiftDate(localDate(),-1);let selectedDate=date;for(let days=1;days<=7;days++){const recent=shiftDate(localDate(),-days),covered=await db.prepare("SELECT status FROM history_coverage WHERE source='dessmonitor' AND entity_id=? AND date=?").bind(entity,recent).first();if(!covered){selectedDate=recent;break;}}
+  const solarBackfillDay=async():Promise<{status?:string;samples?:number;source?:string;date?:string}>=>{const provider=new DessMonitorProvider(),snapshot=await cachedSnapshot(true,false);if(!snapshot)return{status:'no_solar_metadata'};const entity=snapshot.device.serial,row=await db.prepare('SELECT next_backfill_date FROM solar_sync_state WHERE entity_id=?').bind(entity).first<{next_backfill_date:string|null}>(),date=row?.next_backfill_date??shiftDate(localDate(),-1);let selectedDate=date;{const coveredDays=new Set((await db.prepare("SELECT date FROM history_coverage WHERE source='dessmonitor' AND entity_id=? AND date>=?").bind(entity,shiftDate(localDate(),-REFILL_DAYS)).all<{date:string}>()).results.map(r=>r.date));for(let days=1;days<=REFILL_DAYS;days++){const recent=shiftDate(localDate(),-days);if(!coveredDays.has(recent)){selectedDate=recent;break;}}}
     const oldest=(await db.prepare("SELECT MIN(period) date FROM solar_energy_periods WHERE entity_id=? AND period_type='year'").bind(entity).first<{date:string|null}>())?.date??localDate().slice(0,4);if(selectedDate<oldest+'-01-01')return{status:'solar_backfill_complete'};
     const history=await provider.getDay(selectedDate);await saveSamples(entity,history.series);await saveRawFields(entity,history.rawFields);await db.prepare("INSERT INTO history_coverage(source,entity_id,date,status,recorded_at) VALUES ('dessmonitor',?,?,?,?) ON CONFLICT(source,entity_id,date) DO UPDATE SET status=excluded.status,recorded_at=excluded.recorded_at").bind(entity,selectedDate,history.series.length?'available':'missing',new Date().toISOString()).run();
     await db.prepare('INSERT INTO solar_sync_state(entity_id,next_backfill_date) VALUES (?,?) ON CONFLICT(entity_id) DO UPDATE SET next_backfill_date=excluded.next_backfill_date').bind(entity,selectedDate===date?shiftDate(date,-1):date).run();return{source:'dessmonitor',date:selectedDate,samples:history.series.length};
@@ -60,7 +62,17 @@ export async function runCollection(manual=false){
   }catch(error){await finishJob(job,String(error));throw error;}
 }
 // Indexes the 5-minute path relies on. The deploy migration creates them too; this daily step covers a deploy that skipped migrations while Turso was blocked.
-export async function ensureIndexes(){await database().prepare('CREATE INDEX IF NOT EXISTS idx_tuya_obs_time ON tuya_observations (observed_at)').run();}
+export const USAGE_INDEXES=[
+  'CREATE INDEX IF NOT EXISTS idx_tuya_obs_time ON tuya_observations (observed_at)',
+  'CREATE INDEX IF NOT EXISTS idx_cmdlog_status ON tuya_command_log (status)',
+  'CREATE INDEX IF NOT EXISTS idx_actions_status ON automation_actions (status)',
+  'CREATE INDEX IF NOT EXISTS idx_runs_status ON automation_runs (status)',
+  'CREATE INDEX IF NOT EXISTS idx_tuya_runs_status ON tuya_collection_runs (status, started_at)',
+  'CREATE INDEX IF NOT EXISTS idx_solar_runs_status ON solar_collection_runs (status, finished_at)',
+  'CREATE INDEX IF NOT EXISTS idx_summaries_gran_period ON telemetry_summaries (granularity, period)',
+  'CREATE INDEX IF NOT EXISTS idx_energy_periods_day ON solar_energy_periods (period_type, period)',
+];
+export async function ensureIndexes(){for(const sql of USAGE_INDEXES)await database().prepare(sql).run();}
 export async function maintainCollection(){
     await dueWork('ensure-indexes',86400000,ensureIndexes);
     await evaluateAlerts();
@@ -74,7 +86,9 @@ export async function maintainCollection(){
       try{await dueWork('device-statistics',1800000,()=>deviceStatisticsStep());}catch{/* Same: the job row keeps the error. */}
       try{await dueWork('device-hourly',1800000,()=>deviceHourlyStep());}catch{/* Same: the job row keeps the error. */}
       for(const [id,interval,unit] of [['provider-documents',86400000,documentsUnit],['dessmonitor-alarms',3600000,alarmsUnit],['tuya-events',300000,tuyaEventsUnit]] as const){try{await dueWork(id,interval,unit);}catch{/* Job health and the backfill ledger carry the error; later steps still run. */}}
-      await dueWork('retention',3600000,async()=>{const bytes=await storageBytes(),retained=await retentionStep(bytes!==null&&bytes>STORAGE_PRUNE_BYTES);const catalog=await database().prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();for(const c of catalog.results)await rebuildLongPeriods(c.source,c.id);return retained;});
+      await dueWork('retention',3600000,async()=>{const bytes=await storageBytes();return retentionStep(bytes!==null&&bytes>STORAGE_PRUNE_BYTES);});
+      // Month and year totals are rebuilt from every stored day summary, so once a day; retention and the summary step rebuild the entity they change.
+      await dueWork('rebuild-long-periods',86400000,async()=>{const catalog=await database().prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();for(const c of catalog.results)await rebuildLongPeriods(c.source,c.id);});
       try{await dueWork('grid-rollup',900000,async()=>{const entity=(await cachedSnapshot(false,false))?.device.serial;return entity?gridRollupStep(entity):{done:[]};});}catch{/* The job row keeps the error; other maintenance still runs. */}
       try{await dueWork('daystat-backfill',900000,async()=>{const entity=(await cachedSnapshot(false,false))?.device.serial;return entity?dayStatBackfillStep(entity):{done:[]};});}catch{/* The job row keeps the error; other maintenance still runs. */}
       await dueWork('operations-summary',86400000,summarizeOperations);
