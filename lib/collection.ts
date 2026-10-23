@@ -13,7 +13,7 @@ import { deviceHourlyStep } from './device-hourly';
 import { deviceStatisticsStep } from './device-statistics';
 import { evaluateAutomations } from './automations';
 import { reconcileCommands } from './commands';
-import { trackUsage } from './usage';
+import { economyLevel, trackUsage, usageAlerts } from './usage';
 import { evaluateAlerts } from './notifications';
 import { localDate, shiftDate } from './measurements';
 import { gridRollupStep } from './grid-stats';
@@ -75,24 +75,35 @@ export const USAGE_INDEXES=[
 export async function ensureIndexes(){for(const sql of USAGE_INDEXES)await database().prepare(sql).run();}
 export async function maintainCollection(){
     await dueWork('ensure-indexes',86400000,ensureIndexes);
+    // Month-to-date reads decide how much background work runs: 1 pauses backfills and imports, 2 pauses all maintenance, 3 leaves live collection, automations and alerts only.
+    const level=await economyLevel().catch(()=>0),run=(max:number)=>level<max;
+    try{await dueWork('usage-check',3600000,()=>usageAlerts());}catch{/* An alert problem must not stop maintenance. */}
     await evaluateAlerts();
+    if(!run(3))return{economy:level};
+    if(run(2)){
     await dueWork('actual-energy-repair',900000,repairActualEnergyStep);
     // Current counters are shared and refreshed hourly rather than per report or browser.
     try{await dueWork('solar-periods',3600000,async()=>{const errors=await syncPeriods(new DessMonitorProvider(),localDate().slice(0,4));if(errors.length)throw new Error(errors.join('; '));});}catch{/* Durable job health carries the error; live collection still succeeds. */}
     try{await dueWork('solar-reconcile',86400000,async()=>{const today=localDate(),previous=shiftDate(today,-7);if(previous.slice(0,7)!==today.slice(0,7)){const errors=await syncPeriods(new DessMonitorProvider(),today.slice(0,4),previous.slice(0,7));if(errors.length)throw new Error(errors.join('; '));}});
+      if(run(1)){
       await dueWork('solar-period-backfill',300000,backfillPeriodUnit);
       await dueWork('history-unit',300000,historyUnit);
       try{await dueWork('meter-history',1800000,()=>meterHistoryStep());}catch{/* The job row keeps the error; other maintenance still runs. */}
       try{await dueWork('device-statistics',1800000,()=>deviceStatisticsStep());}catch{/* Same: the job row keeps the error. */}
       try{await dueWork('device-hourly',1800000,()=>deviceHourlyStep());}catch{/* Same: the job row keeps the error. */}
       for(const [id,interval,unit] of [['provider-documents',86400000,documentsUnit],['dessmonitor-alarms',3600000,alarmsUnit],['tuya-events',300000,tuyaEventsUnit]] as const){try{await dueWork(id,interval,unit);}catch{/* Job health and the backfill ledger carry the error; later steps still run. */}}
+      }
       await dueWork('retention',3600000,async()=>{const bytes=await storageBytes();return retentionStep(bytes!==null&&bytes>STORAGE_PRUNE_BYTES);});
       // Month and year totals are rebuilt from every stored day summary, so once a day; retention and the summary step rebuild the entity they change.
       await dueWork('rebuild-long-periods',86400000,async()=>{const catalog=await database().prepare('SELECT id,source FROM device_catalog').all<{id:string;source:string}>();for(const c of catalog.results)await rebuildLongPeriods(c.source,c.id);});
+      if(run(1)){
       try{await dueWork('grid-rollup',900000,async()=>{const entity=(await cachedSnapshot(false,false))?.device.serial;return entity?gridRollupStep(entity):{done:[]};});}catch{/* The job row keeps the error; other maintenance still runs. */}
       try{await dueWork('daystat-backfill',900000,async()=>{const entity=(await cachedSnapshot(false,false))?.device.serial;return entity?dayStatBackfillStep(entity):{done:[]};});}catch{/* The job row keeps the error; other maintenance still runs. */}
+      }
       await dueWork('operations-summary',86400000,summarizeOperations);
     }catch(error){throw error;}
+    }
+    return{economy:level};
 }
 export async function summarizeOperations(){
   const db=database(),cutoff=shiftDate(localDate(),-90);

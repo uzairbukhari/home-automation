@@ -1,6 +1,6 @@
 import { getOwnerUser } from '@/lib/owner-auth';
 import { database } from '@/lib/jobs';
-import { usageSummary } from '@/lib/usage';
+import { monthBudget, usageSummary } from '@/lib/usage';
 type Db=ReturnType<typeof database>;
 // Row counts and per-source totals scan whole tables, so they are recounted every few hours and stored; the page polls far more often than that.
 async function tableFigures(db:Db){
@@ -18,6 +18,6 @@ export async function GET(){if(!await getOwnerUser())return Response.json({error
   const coverage=(await db.prepare('SELECT provider,entity_id,dataset,oldest_covered,covered_through,status,rows_total,error,updated_at FROM provider_backfill ORDER BY provider,dataset,entity_id').all()).results;
   const collection=jobs.find(j=>(j as {id:string}).id==='collection') as {last_success?:string}|undefined;
   let databaseBytes:number|null=null;try{const pages=await db.prepare('PRAGMA page_count').first<{page_count:number}>(),size=await db.prepare('PRAGMA page_size').first<{page_size:number}>();if(pages&&size)databaseBytes=pages.page_count*size.page_size;}catch{/* Some hosted D1 surfaces restrict these pragmas. */}
-  const usage=await usageSummary().catch(()=>[]);
-  return Response.json({usage,jobs,requests,summaries,counts,coverage,solarDays,databaseBytes,schedulerHealthy:Boolean(collection?.last_success&&Date.now()-Date.parse(collection.last_success)<900000),retention:{raw:'kept until storage reaches 4 GB, then the oldest verified days are summarized and pruned',hourlyDays:90,daily:'permanent',monthly:'permanent',yearly:'permanent'},note:'Scheduler health is inferred from successful collection, not proof of an external job configuration.'},{headers:{'cache-control':'private, no-store'}});
+  const usage=await usageSummary().catch(()=>[]),budget=await monthBudget().catch(()=>null);
+  return Response.json({budget,usage,jobs,requests,summaries,counts,coverage,solarDays,databaseBytes,schedulerHealthy:Boolean(collection?.last_success&&Date.now()-Date.parse(collection.last_success)<900000),retention:{raw:'kept until storage reaches 4 GB, then the oldest verified days are summarized and pruned',hourlyDays:90,daily:'permanent',monthly:'permanent',yearly:'permanent'},note:'Scheduler health is inferred from successful collection, not proof of an external job configuration.'},{headers:{'cache-control':'private, no-store'}});
 }

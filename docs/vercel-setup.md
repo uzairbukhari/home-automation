@@ -34,3 +34,12 @@ with the value above. Use the project's main address (Settings → Domains), not
 - `https://<project>.vercel.app/api/admin/collect-debug` (signed in) runs one collection and shows the result.
 - The Android app asks for the server address when you sign in; use the Vercel address.
 - `android-release.yml` builds the signed APK on demand (Actions tab) and attaches it to the run.
+
+## Database usage (Turso Free plan)
+
+The free plan allows 500M rows read a month; past that Turso blocks every query until the month resets. Settings → Storage shows reads so far this month and the projection to month end. The app keeps itself under the limit:
+
+- At 50%, 75% and 90% of the quota (counted or projected) it sends an in-app alert.
+- At 70% projected, backfills and history imports pause; at 85%, all maintenance pauses; at 95%, only live collection, automations and alerts run.
+- While Turso is blocked, `/api/mobile/collect` answers 200 `database_blocked` so cron-job.org keeps the job, and deploys skip migrations (the runtime adds the indexes it needs).
+- A test fails the build if a 5-minute or maintenance query starts scanning a history table.
