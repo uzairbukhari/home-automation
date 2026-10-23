@@ -13,6 +13,7 @@ import { deviceHourlyStep } from './device-hourly';
 import { deviceStatisticsStep } from './device-statistics';
 import { evaluateAutomations } from './automations';
 import { reconcileCommands } from './commands';
+import { trackUsage } from './usage';
 import { evaluateAlerts } from './notifications';
 import { localDate, shiftDate } from './measurements';
 import { gridRollupStep } from './grid-stats';
@@ -54,7 +55,7 @@ export async function runCollection(manual=false){
     await finishJob(job,result.status==='failed'?'Provider collection failed':undefined);
     // Respond after fresh collection and rule evaluation. Scheduled callers have
     // a 30-second timeout; maintenance has its own durable lease and resumes.
-    after(async()=>{try{await dueWork('collection-maintenance',0,maintainCollection);}catch{/* Individual jobs retain their failure state. */}});
+    after(async()=>{try{await trackUsage('maintenance',()=>dueWork('collection-maintenance',0,maintainCollection));}catch{/* Individual jobs retain their failure state. */}});
     return result;
   }catch(error){await finishJob(job,String(error));throw error;}
 }
