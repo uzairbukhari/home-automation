@@ -23,7 +23,9 @@ export async function reserveProviderRequest(provider:ProviderId,purpose:string,
   const days=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,0)).getUTCDate();
   const paced=Math.floor(discretionary*now.getUTCDate()/days);
   const limit=priority?available:purpose==='history'?Math.floor(paced*.8):paced;
-  await appDb().prepare('INSERT OR IGNORE INTO provider_budget(provider,period,used) SELECT ?,?,COUNT(*) FROM provider_requests WHERE provider=? AND substr(timestamp,1,7)=?').bind(provider,month,provider,month).run();
+  // The month's calls are counted once, when its budget row does not exist yet; the range (not substr) lets the timestamp index serve it.
+  const next=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)).toISOString();
+  await appDb().prepare('INSERT OR IGNORE INTO provider_budget(provider,period,used) SELECT ?,?,(SELECT COUNT(*) FROM provider_requests WHERE provider=? AND timestamp>=? AND timestamp<?) WHERE NOT EXISTS (SELECT 1 FROM provider_budget WHERE provider=? AND period=?)').bind(provider,month,provider,month+'-01',next,provider,month).run();
   const row=await appDb().prepare('UPDATE provider_budget SET used=used+1 WHERE provider=? AND period=? AND used<? RETURNING used').bind(provider,month,limit).first();
   if(!row)throw new Error('Provider request budget reached; waiting for the next allowance window.');
 }

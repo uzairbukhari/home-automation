@@ -230,7 +230,7 @@ export const tuyaObservations = sqliteTable('tuya_observations', {
   source_timestamp: text('source_timestamp').notNull(),
   observed_at: text('observed_at').notNull(),
   quality: text('quality').notNull(),
-}, t => [primaryKey({columns:[t.device_id,t.code,t.observed_at]}),index('idx_tuya_observed').on(t.device_id,t.observed_at)]);
+}, t => [primaryKey({columns:[t.device_id,t.code,t.observed_at]}),index('idx_tuya_observed').on(t.device_id,t.observed_at),index('idx_tuya_obs_time').on(t.observed_at)]);
 export const tuyaScenes = sqliteTable('tuya_scenes', {
   home_id: text('home_id').notNull(),
   scene_id: text('scene_id').notNull(),
