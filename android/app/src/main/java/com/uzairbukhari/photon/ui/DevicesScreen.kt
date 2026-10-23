@@ -81,7 +81,7 @@ fun DevicesScreen(model: DevicesViewModel, tileDevice: String?, onTile: (String)
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 model.load()
-                delay(30_000)
+                delay(120_000)
             }
         }
     }

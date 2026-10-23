@@ -58,12 +58,21 @@ export async function dayStats(entity: string, from: string, to: string): Promis
 export async function dayStatBackfillStep(entity: string, backfill = 5) {
   const today = localDate(), first = await firstSampleDate(entity);
   if (!first) return { done: [] as string[] };
-  const have = await storedDayStats(database(), entity, first, shiftDate(today, -1)), fresh: InverterDay[] = [];
+  const db = database(), kind = `daystat-skip:${entity}`, retryBefore = new Date(Date.now() - 7 * 86400000).toISOString();
+  const [have, skipped] = await Promise.all([
+    storedDayStats(db, entity, first, shiftDate(today, -1)),
+    // Days whose readings were too sparse to store are looked at again once a week, not every run.
+    db.prepare('SELECT date FROM operational_daily WHERE kind=? AND json_extract(data,\'$.checkedAt\')>=?').bind(kind, retryBefore).all<{ date: string }>(),
+  ]), skip = new Set(skipped.results.map(r => r.date)), fresh: InverterDay[] = [], unstorable: string[] = [];
   let date = shiftDate(today, -1), scanned = 0, attempts = 0;
   while (date >= first && fresh.length < backfill && scanned < 400 && attempts < backfill * 3) {
-    if (!have.has(date)) { attempts++; const points = await storedSamples(entity, date, date), day = inverterDay(date, points); if (storableDay(day, points.length, today)) fresh.push(day); }
+    if (!have.has(date) && !skip.has(date)) {
+      attempts++; const points = await storedSamples(entity, date, date), day = inverterDay(date, points);
+      if (storableDay(day, points.length, today)) fresh.push(day); else unstorable.push(date);
+    }
     date = shiftDate(date, -1); scanned++;
   }
-  await writeDayStats(database(), entity, fresh);
+  await writeDayStats(db, entity, fresh);
+  if (unstorable.length) await db.batch(unstorable.map(d => db.prepare('INSERT INTO operational_daily(date,kind,data) VALUES (?,?,?) ON CONFLICT(date,kind) DO UPDATE SET data=excluded.data').bind(d, kind, JSON.stringify({ checkedAt: new Date().toISOString() }))));
   return { done: fresh.map(d => d.date) };
 }

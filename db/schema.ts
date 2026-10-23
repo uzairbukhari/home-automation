@@ -32,12 +32,12 @@ export const tuyaDevicePreferences = sqliteTable("tuya_device_preferences", {
 export const tuyaCommandLog = sqliteTable("tuya_command_log", {
   id:integer("id").primaryKey({autoIncrement:true}), deviceId:text("device_id").notNull(), code:text("code").notNull(), requestedValue:text("requested_value").notNull(),
   status:text("status").notNull(), error:text("error"), requestedAt:text("requested_at").notNull().default(sql`CURRENT_TIMESTAMP`), confirmedAt:text("confirmed_at"),
-}, table => [index("idx_tuya_commands_device_time").on(table.deviceId,table.requestedAt)]);
+}, table => [index("idx_tuya_commands_device_time").on(table.deviceId,table.requestedAt),index("idx_cmdlog_status").on(table.status)]);
 
 export const tuyaCollectionRuns = sqliteTable("tuya_collection_runs", {
   id:integer("id").primaryKey({autoIncrement:true}), startedAt:text("started_at").notNull(), finishedAt:text("finished_at"), status:text("status").notNull(),
   deviceCount:integer("device_count").notNull().default(0), readingCount:integer("reading_count").notNull().default(0), error:text("error"),
-});
+}, table => [index("idx_tuya_runs_status").on(table.status,table.startedAt)]);
 
 export const connectionState = sqliteTable("connection_state", {
   provider:text("provider").primaryKey(), status:text("status").notNull().default("not_configured"), lastSuccessAt:text("last_success_at"), lastErrorCode:text("last_error_code"), updatedAt:text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -66,12 +66,12 @@ export const solarEnergyPeriods = sqliteTable('solar_energy_periods', {
   solar: real('solar_kwh'), grid: real('grid_kwh'), home: real('home_kwh'), source: text('solar_source').notNull(), gridSource: text('grid_source').notNull(),
   coveredHours: real('covered_hours').notNull().default(0), partial: integer('partial',{mode:'boolean'}).notNull().default(true),
   report: text('report_json'), updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-}, table => [primaryKey({ columns: [table.entityId,table.periodType,table.period] })]);
+}, table => [primaryKey({ columns: [table.entityId,table.periodType,table.period] }),index('idx_energy_periods_day').on(table.periodType,table.period)]);
 
 export const solarCollectionRuns = sqliteTable('solar_collection_runs', {
   id: integer('id').primaryKey({autoIncrement:true}), startedAt: text('started_at').notNull(), finishedAt: text('finished_at'),
   status: text('status').notNull(), samples: integer('samples').notNull().default(0), error: text('error'),
-});
+}, t => [index('idx_solar_runs_status').on(t.status,t.finishedAt)]);
 export const solarSyncState = sqliteTable('solar_sync_state', {
   entityId: text('entity_id').primaryKey(), nextBackfillDate: text('next_backfill_date'), oldestDate: text('oldest_date'),
   recoveredThrough: text('recovered_through'), leaseUntil: text('lease_until'), leaseToken: text('lease_token'),
@@ -160,7 +160,7 @@ export const telemetrySummaries = sqliteTable('telemetry_summaries', {
   data: text('data').notNull(),
   calculation_version: integer('calculation_version').notNull().default(1),
   updated_at: text('updated_at').notNull(),
-}, t => [primaryKey({columns:[t.source,t.entity_id,t.granularity,t.period,t.room]}),index('idx_summaries_period').on(t.source,t.granularity,t.period)]);
+}, t => [primaryKey({columns:[t.source,t.entity_id,t.granularity,t.period,t.room]}),index('idx_summaries_period').on(t.source,t.granularity,t.period),index('idx_summaries_gran_period').on(t.granularity,t.period)]);
 export const operationalDaily = sqliteTable('operational_daily', {
   date: text('date').notNull(),
   kind: text('kind').notNull(),
@@ -188,14 +188,14 @@ export const automationRuns = sqliteTable('automation_runs', {
   status: text('status').notNull(),
   reason: text('reason'),
   inputs: text('inputs').notNull().default('[]'),
-}, t => [index('idx_automation_runs_time').on(t.started_at)]);
+}, t => [index('idx_automation_runs_time').on(t.started_at),index('idx_runs_status').on(t.status)]);
 export const automationActions = sqliteTable('automation_actions', {
   run_id: text('run_id').notNull(),
   action_index: integer('action_index').notNull(),
   command_id: integer('command_id'),
   status: text('status').notNull(),
   error: text('error'),
-}, t => [primaryKey({columns:[t.run_id,t.action_index]})]);
+}, t => [primaryKey({columns:[t.run_id,t.action_index]}),index('idx_actions_status').on(t.status)]);
 export const automationControl = sqliteTable('automation_control', {
   id: text('id').primaryKey().notNull(),
   paused: integer('paused').notNull().default(0),
