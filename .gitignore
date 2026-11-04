@@ -40,6 +40,8 @@ next-env.d.ts
 *.tsbuildinfo
 /dist/
 /.wrangler/
+/.open-next/
+.dev.vars*
 # Checkout-local execution profile and tool state; never publish them.
 /.sites-runtime/
 /.agents/

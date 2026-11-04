@@ -1,0 +1,21 @@
+// Cloudflare Worker for the app. Built by `npm run cf:build` (OpenNext), deployed by the "Cloudflare deploy" workflow.
+// See docs/cloudflare-setup.md. Secrets (DessMonitor, Tuya, session and collection secrets) are set with
+// `wrangler secret put`, not here.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "home-automation",
+  "main": "cloudflare/worker.mjs",
+  "compatibility_date": "2026-10-13",
+  // nodejs_compat also exposes Worker vars and secrets as process.env, which is how lib/env.ts reads settings.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "observability": { "enabled": true },
+  "d1_databases": [
+    // Created on the first deploy if it does not exist yet. Schema comes from ./drizzle (npm run cf:migrate).
+    { "binding": "DB", "database_name": "home-dashboard", "migrations_dir": "drizzle" }
+  ],
+  "triggers": {
+    // The 5-minute collection. Empty until cutover: while Vercel + cron-job.org still collect, a second collector would duplicate work.
+    "crons": []
+  }
+}
