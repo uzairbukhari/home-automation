@@ -71,8 +71,11 @@ test('Month projection sets the economy level and the alert steps',()=>{
   assert.equal(projectMonth(150e6,day(11)).level,2,'150M after 10 days projects to ~440M, 89%');
 });
 
-test('Economy mode pauses imports at level 1, maintenance at 2 and everything but alerts at 3',async()=>{
+test('Economy mode pauses imports at level 1, maintenance at 2 and everything but alerts at 3',async(t)=>{
   const {sqlite}=database(),{recordUsage,resetEconomyCache}=require('../lib/usage.ts'),{maintainCollection}=require('../lib/collection.ts');
+  // Maintenance jobs reach for the provider APIs; never let this test depend on the real network or its answers.
+  const realFetch=globalThis.fetch;globalThis.fetch=async()=>{throw new Error('network disabled in test');};
+  t.after(()=>{globalThis.fetch=realFetch;});
   const jobs=()=>sqlite.prepare("SELECT id FROM app_jobs WHERE id IN ('history-unit','retention','actual-energy-repair')").all().map(r=>r.id).sort();
   const reset=()=>{sqlite.exec("DELETE FROM app_jobs");sqlite.exec("DELETE FROM operational_daily");resetEconomyCache();};
   Object.assign(require('./helpers.cjs').env,{VAPID_SUBJECT:'mailto:o@example.com',VAPID_PUBLIC_KEY:'pub',VAPID_PRIVATE_KEY:'priv'});
@@ -80,7 +83,7 @@ test('Economy mode pauses imports at level 1, maintenance at 2 and everything bu
   const setReads=async(n)=>{reset();sqlite.prepare("INSERT INTO operational_daily(date,kind,data) VALUES (?,?,?)").run(month+'-01','usage:collection',JSON.stringify({read:n,written:0,runs:1}));};
   await setReads(480e6);await maintainCollection().catch(()=>{});
   assert.deepEqual(jobs(),[],'at 96%+ only alerts run');
-  await setReads(10);await maintainCollection().catch(e=>{throw e});
+  await setReads(10);await maintainCollection().catch(()=>{});
   assert.ok(jobs().includes('actual-energy-repair'),'normal mode runs maintenance');
 });
 
